@@ -1,0 +1,17 @@
+
+services:
+  mysql:
+    image: mysql:latest
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: admin@123
+      MYSQL_DATABASE: bankManagement
+      MYSQL_USER: tanmai
+      MYSQL_PASSWORD: tanmai@123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_bank_manager_data:/var/lib/mysql
+
+volumes:
+  mysql_bank_manager_data:
