@@ -1,6 +1,10 @@
 package user
 
-import "github.com/jinzhu/gorm"
+import (
+	"bankManagement/models/bank"
+
+	"github.com/jinzhu/gorm"
+)
 
 type UserConfig struct {
 	DB *gorm.DB
@@ -8,4 +12,5 @@ type UserConfig struct {
 
 func (config *UserConfig) TableMigration() {
 	config.DB.AutoMigrate(&User{})
+	config.DB.Table("users").Related(&bank.Bank{})
 }
