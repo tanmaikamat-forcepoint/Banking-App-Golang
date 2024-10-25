@@ -2,6 +2,7 @@ package main
 
 import (
 	"bankManagement/app"
+	"bankManagement/modules"
 	"bankManagement/repository"
 	"bankManagement/utils/log"
 	"os"
@@ -28,6 +29,8 @@ func main() {
 	repo := NewRepository()
 	appObj := app.NewApp(name, db, log, wg, repo)
 	appObj.Init()
+	modules.RegisterTableMigrations(appObj)
+	modules.RegisterAllModules(appObj)
 	appObj.StartServer()
 
 }
