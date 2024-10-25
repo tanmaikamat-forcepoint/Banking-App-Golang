@@ -22,20 +22,7 @@ type ModuleConfig interface {
 
 func RegisterAllModules(appObj *app.App) {
 	RegisterUserModule(appObj)
-<<<<<<< HEAD
-	// RegisterAllConfigs(appObj)
 
-}
-
-func RegisterTableMigrations(appObj *app.App) {
-	userConfig := user.UserConfig{DB: appObj.DB}
-	paymentConfig := payments.PaymentConfig{DB: appObj.DB}
-	transactionConfig := transaction.TransactionConfig{DB: appObj.DB}
-	salaryDisbursementConfig := salaryDisbursement.SalaryDisbursementConfig{DB: appObj.DB}
-	documentConfig := document.DocumentConfig{DB: appObj.DB}
-
-	RegisterAllConfigs(appObj, []ModuleConfig{&userConfig, &paymentConfig, &transactionConfig, &salaryDisbursementConfig, &documentConfig})
-=======
 }
 
 func RegisterTableMigrations(appObj *app.App) {
@@ -63,7 +50,6 @@ func RegisterTableMigrations(appObj *app.App) {
 		&beneficiaryConfig,
 	})
 
->>>>>>> d304374cac5be24d0b51881eb4113c755e132b92
 }
 
 func RegisterAllRoutes(appObj *app.App, controllers []Controller) {
