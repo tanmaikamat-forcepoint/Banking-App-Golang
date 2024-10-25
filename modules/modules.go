@@ -2,6 +2,10 @@ package modules
 
 import (
 	"bankManagement/app"
+	"bankManagement/models/document"
+	"bankManagement/models/payments"
+	"bankManagement/models/salaryDisbursement"
+	"bankManagement/models/transaction"
 	"bankManagement/models/user"
 
 	"github.com/gorilla/mux"
@@ -23,8 +27,12 @@ func RegisterAllModules(appObj *app.App) {
 
 func RegisterTableMigrations(appObj *app.App) {
 	userConfig := user.UserConfig{DB: appObj.DB}
+	paymentConfig := payments.PaymentConfig{DB: appObj.DB}
+	transactionConfig := transaction.TransactionConfig{DB: appObj.DB}
+	salaryDisbursementConfig := salaryDisbursement.SalaryDisbursementConfig{DB: appObj.DB}
+	documentConfig := document.DocumentConfig{DB: appObj.DB}
 
-	RegisterAllConfigs(appObj, []ModuleConfig{&userConfig})
+	RegisterAllConfigs(appObj, []ModuleConfig{&userConfig, &paymentConfig, &transactionConfig, &salaryDisbursementConfig, &documentConfig})
 }
 
 func RegisterAllRoutes(appObj *app.App, controllers []Controller) {
