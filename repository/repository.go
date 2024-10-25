@@ -13,7 +13,7 @@ type Repository interface {
 	Filter(condition string, args ...interface{}) QueryProcessor
 	Count(limit, offset int, totalCount *int) QueryProcessor
 	Update(uow *UOW, updated_value interface{}, id interface{}) error
-	DeleteById(uow *UOW, id interface{}) error
+	DeleteById(uow *UOW, out interface{}, id interface{}) error
 }
 
 type GormRepositoryMySQL struct {
