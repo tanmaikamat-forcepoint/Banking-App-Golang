@@ -58,6 +58,6 @@ func NewWaitGroup() *sync.WaitGroup {
 	return &sync.WaitGroup{}
 }
 
-func NewRepository() *repository.Repository {
-	return repository.NewRepository()
+func NewRepository() repository.Repository {
+	return repository.NewGormRepositoryMySQL()
 }
