@@ -2,6 +2,7 @@ package modules
 
 import (
 	"bankManagement/app"
+	"bankManagement/models/user"
 
 	"github.com/gorilla/mux"
 )
@@ -18,6 +19,12 @@ func RegisterAllModules(appObj *app.App) {
 	RegisterUserModule(appObj)
 	// RegisterAllConfigs(appObj)
 
+}
+
+func RegisterTableMigrations(appObj *app.App) {
+	userConfig := user.UserConfig{DB: appObj.DB}
+
+	RegisterAllConfigs(appObj, []ModuleConfig{&userConfig})
 }
 
 func RegisterAllRoutes(appObj *app.App, controllers []Controller) {
