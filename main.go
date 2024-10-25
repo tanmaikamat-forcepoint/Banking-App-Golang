@@ -32,6 +32,7 @@ func main() {
 	modules.RegisterTableMigrations(appObj)
 	modules.RegisterAllModules(appObj)
 	appObj.StartServer()
+
 }
 
 func NewDBConnection(log log.WebLogger) *gorm.DB {
