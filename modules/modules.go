@@ -45,6 +45,12 @@ func RegisterAllModules(appObj *app.App) {
 	})
 }
 
+func RegisterTableMigrations(appObj *app.App) {
+	userConfig := user.UserConfig{DB: appObj.DB}
+
+	RegisterAllConfigs(appObj, []ModuleConfig{&userConfig})
+}
+
 func RegisterAllRoutes(appObj *app.App, controllers []Controller) {
 	for i := 0; i < len(controllers); i++ {
 		controllers[i].RegisterRoutes(appObj.Router)

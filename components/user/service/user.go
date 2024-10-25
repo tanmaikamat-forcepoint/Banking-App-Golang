@@ -9,13 +9,13 @@ import (
 
 type UserService struct {
 	DB         *gorm.DB
-	repository *repository.Repository
+	repository repository.Repository
 	log        log.WebLogger
 }
 
 func NewUserService(
 	DB *gorm.DB,
-	repository *repository.Repository,
+	repository repository.Repository,
 	log log.WebLogger,
 ) *UserService {
 	return &UserService{

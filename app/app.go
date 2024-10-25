@@ -21,10 +21,10 @@ type App struct {
 	DB         *gorm.DB
 	Log        log.WebLogger
 	WG         *sync.WaitGroup
-	Repository *repository.Repository
+	Repository repository.Repository
 }
 
-func NewApp(name string, db *gorm.DB, log log.WebLogger, wg *sync.WaitGroup, repository *repository.Repository) *App {
+func NewApp(name string, db *gorm.DB, log log.WebLogger, wg *sync.WaitGroup, repository repository.Repository) *App {
 	return &App{
 		Name:       name,
 		DB:         db,

@@ -2,12 +2,7 @@ package main
 
 import (
 	"bankManagement/app"
-	"bankManagement/models/bank"
-	"bankManagement/models/beneficiary"
-	"bankManagement/models/client"
-	"bankManagement/models/employee"
-	"bankManagement/models/transaction"
-	"bankManagement/models/user"
+	"bankManagement/modules"
 	"bankManagement/repository"
 	"bankManagement/utils/log"
 	"os"
@@ -34,43 +29,8 @@ func main() {
 	repo := NewRepository()
 	appObj := app.NewApp(name, db, log, wg, repo)
 	appObj.Init()
-
-	// 1. RoleConfig initi & run mig
-	roleConfig := &user.RoleConfig{DB: db}
-	roleConfig.TableMigration()
-
-	/// 2. User Config
-	userConfig := &user.UserConfig{DB: db}
-	userConfig.TableMigration()
-
-	///3.  Bank config
-	bankConfig := &bank.BankConfig{DB: db}
-	bankConfig.TableMigration()
-
-	/// 4.  Bank user config
-	bankUserConfig := &bank.BankUserConfig{DB: db}
-	bankUserConfig.TableMigration()
-
-	// 5. Clientconfig
-	clientConfig := &client.ClientConfig{DB: db}
-	clientConfig.TableMigration()
-
-	/// 6. ClientUser config
-	clientUserConfig := &client.ClientUserConfig{DB: db}
-	clientUserConfig.TableMigration()
-
-	// 7.  EmployeeConfig
-	employeeConfig := &employee.EmployeeConfig{DB: db}
-	employeeConfig.TableMigration()
-
-	/// 8. Transaction Config  initialize
-	transactionConfig := &transaction.TransactionConfig{DB: db}
-	transactionConfig.TableMigration()
-
-	// 9. beneficiary config
-	beneficiaryConfig := &beneficiary.BeneficiaryConfig{DB: db}
-	beneficiaryConfig.TableMigration()
-
+	modules.RegisterTableMigrations(appObj)
+	modules.RegisterAllModules(appObj)
 	appObj.StartServer()
 }
 
@@ -100,6 +60,6 @@ func NewWaitGroup() *sync.WaitGroup {
 	return &sync.WaitGroup{}
 }
 
-func NewRepository() *repository.Repository {
-	return repository.NewRepository()
+func NewRepository() repository.Repository {
+	return repository.NewGormRepositoryMySQL()
 }
