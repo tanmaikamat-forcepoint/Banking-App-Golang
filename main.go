@@ -29,6 +29,7 @@ func main() {
 	appObj := app.NewApp(name, db, log, wg, repo)
 	appObj.Init()
 	appObj.StartServer()
+
 }
 
 func NewDBConnection(log log.WebLogger) *gorm.DB {

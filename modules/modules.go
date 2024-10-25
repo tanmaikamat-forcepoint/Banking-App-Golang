@@ -16,6 +16,7 @@ type ModuleConfig interface {
 
 func RegisterAllModules(appObj *app.App) {
 	RegisterUserModule(appObj)
+	// RegisterAllConfigs(appObj)
 
 }
 
