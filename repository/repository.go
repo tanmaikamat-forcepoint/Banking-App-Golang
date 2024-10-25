@@ -90,13 +90,13 @@ func (g *GormRepositoryMySQL) Filter(condition string, args ...interface{}) Quer
 	}
 }
 func (g *GormRepositoryMySQL) Update(uow *UOW, updated_value interface{}, id interface{}) error {
-	return nil
+	return uow.DB.Save(updated_value).Error
 }
 
-func (g *GormRepositoryMySQL) DeleteById(uow *UOW, id interface{}) error {
+func (g *GormRepositoryMySQL) DeleteById(uow *UOW, out interface{}, id interface{}) error {
 	// var tempInt interface{}
 	// output:=g.GetByID(uow)
-	return nil
+	return uow.DB.Delete(out, id).Error
 }
 
 type UOW struct {
