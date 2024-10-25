@@ -96,6 +96,7 @@ func (g *GormRepositoryMySQL) Update(uow *UOW, updated_value interface{}, id int
 func (g *GormRepositoryMySQL) DeleteById(uow *UOW, id interface{}) error {
 	// var tempInt interface{}
 	// output:=g.GetByID(uow)
+	return nil
 }
 
 type UOW struct {
