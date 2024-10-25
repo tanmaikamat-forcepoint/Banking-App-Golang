@@ -5,12 +5,12 @@ import (
 )
 
 type User struct {
-	gorm.Model        //UserID
-	Username   string `gorm:"uniqueIndex;not null" json:"username"`
-	Password   string `gorm:"not null" json:"password"`
-	Name       string `json:"name"`
-	Email      string `gorm:"uniqueIndex;not null" json:"email"`
-	IsActive   bool   `gorm:"default:true" json:"isActive"`
-	RoleID     uint   `gorm:"not null" json:"roleID"`
-	Role       Role   `gorm:"foreignKey:RoleID;references:ID" json:"role"`
+	gorm.Model
+	Username string `gorm:"unique_index;not null" json:"username"` // unique username
+	Password string `gorm:"not null" json:"password"`
+	Name     string `json:"name"`
+	Email    string `gorm:"unique_index;not null" json:"email"` // Unique email
+	IsActive bool   `gorm:"default:true" json:"is_active"`
+	RoleID   uint   `gorm:"not null" json:"role_id"`
+	Role     Role   `gorm:"foreignkey:RoleID;association_foreignkey:ID" json:"role"`
 }

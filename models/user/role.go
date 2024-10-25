@@ -5,6 +5,6 @@ import (
 )
 
 type Role struct {
-	gorm.Model        //RoleID
-	RoleName   string `gorm:"not null" json:"roleName"` /// 'SUPER_ADMIN', 'BANK_USER', 'CLIENT_USER'
+	gorm.Model
+	RoleName string `gorm:"not null" json:"role_name"` //  'SUPER_ADMIN', 'BANK_USER', 'CLIENT_USER'
 }

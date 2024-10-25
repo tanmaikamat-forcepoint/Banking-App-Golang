@@ -1,11 +1,13 @@
 package bank
 
-import "os/user"
+import (
+	"os/user"
+)
 
 type BankUser struct {
-	BankID uint `gorm:"not null;index" json:"bank_id"`
-	UserID uint `gorm:"not null;index" json:"user_id"`
+	UserID uint `gorm:"primary_key;auto_increment:false" json:"user_id"`
+	BankID uint `gorm:"primary_key;auto_increment:false" json:"bank_id"`
 
-	Bank Bank      `gorm:"foreignKey:BankID" json:"bank"`
-	User user.User `gorm:"foreignKey:UserID" json:"user"`
+	Bank Bank      `gorm:"foreignkey:BankID;association_foreignkey:ID" json:"bank"`
+	User user.User `gorm:"foreignkey:UserID;association_foreignkey:ID" json:"user"`
 }
