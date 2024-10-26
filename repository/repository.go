@@ -6,7 +6,7 @@ import (
 
 type Repository interface {
 	GetAll(uow *UOW, out interface{}, queryProcessors ...QueryProcessor) error
-	GetByID(uow *UOW, out interface{}, id interface{}) error
+	GetByID(uow *UOW, out interface{}, where ...interface{}) error
 	Add(uow *UOW, out interface{}) error
 	Limit(limit interface{}) QueryProcessor
 	Offset(limit interface{}) QueryProcessor
@@ -60,8 +60,8 @@ func (g *GormRepositoryMySQL) GetAll(uow *UOW, out interface{}, queryProcessors 
 	return db.Find(out).Error
 
 }
-func (g *GormRepositoryMySQL) GetByID(uow *UOW, out interface{}, id interface{}) error {
-	return uow.DB.First(out, id).Error
+func (g *GormRepositoryMySQL) GetByID(uow *UOW, out interface{}, where ...interface{}) error {
+	return uow.DB.First(out, where...).Error
 
 }
 func (g *GormRepositoryMySQL) Add(uow *UOW, out interface{}) error {
