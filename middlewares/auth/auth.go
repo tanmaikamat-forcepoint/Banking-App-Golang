@@ -1,0 +1,86 @@
+package auth
+
+import (
+	"bankManagement/utils/encrypt"
+	errorsUtils "bankManagement/utils/errors"
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+)
+
+func AuthenticationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Authentication Middleware Called")
+		token, err := getAuthTokenFromHeader(r)
+		if err != nil {
+			errorsUtils.SendInvalidAuthError(w)
+			return
+		}
+		claims, err1 := encrypt.ValidateJwtToken(token)
+		fmt.Println("Validation Completed")
+		if err1 != nil {
+			fmt.Println(err1)
+			errorsUtils.SendErrorWithCustomMessage(w, err1.Error(), http.StatusUnauthorized)
+			return
+		}
+		fmt.Println("Claims", claims)
+
+		ctx := context.WithValue(r.Context(), "claims", claims)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// func ValidateAdminPermissionsMiddleware(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		defer func(w http.ResponseWriter, r *http.Request) {
+// 			err := recover()
+// 			if err != nil {
+// 				fmt.Println(err)
+// 				errorsUtils.SendErrorWithCustomMessage(w, err.(error).Error())
+// 				return
+// 			}
+// 		}(w, r)
+// 		fmt.Println("Admin Validation Middleware Called")
+// 		fmt.Print(r.Context())
+// 		claims := r.Context().Value("claims").(*encrypt.Claims)
+// 		fmt.Print(claims.UserId)
+
+// 		if err != nil {
+// 			errorsUtils.SendErrorWithCustomMessage(w, err.Error())
+// 			return
+// 		}
+// 		ctx := context.WithValue(r.Context(), constants.AdminKeyValue, admin)
+
+// 		next.ServeHTTP(w, r.WithContext(ctx))
+// 	})
+// }
+// func ValidateCustomerPermissionMiddleware(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		fmt.Println("Customer Validation Middleware Called")
+// 		fmt.Print(r.Context())
+// 		claims := r.Context().Value("claims").(*helper.Claims)
+// 		fmt.Print(claims.UserId)
+// 		customer, err := user.GetStaffInterfaceWithPassById(uint(claims.UserId))
+// 		if err != nil {
+// 			errorsUtils.SendErrorWithCustomMessage(w, err.Error())
+// 			return
+// 		}
+// 		ctx := context.WithValue(r.Context(), constants.ClaimsCustomerKey, customer)
+
+// 		next.ServeHTTP(w, r.WithContext(ctx))
+// 	})
+// }
+
+func getAuthTokenFromHeader(r *http.Request) (string, error) {
+	headers := r.Header
+	fmt.Println(headers)
+	tempTokenHeader, ok := headers["Authorization"]
+	if !ok || len(tempTokenHeader) == 0 {
+		return "", errors.New("Token Not found")
+	}
+	token := tempTokenHeader[0]
+
+	return token, nil
+}
