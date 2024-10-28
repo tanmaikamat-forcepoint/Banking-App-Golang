@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bankManagement/models/bank"
+	"bankManagement/models/client"
 	"bankManagement/models/user"
 	"bankManagement/repository"
 	"bankManagement/utils/encrypt"
@@ -28,10 +30,10 @@ func NewAuthService(
 	}
 }
 
-func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLoginParamDTO, tempUser *user.User) error {
+func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLoginParamDTO, tempUser *user.User, permissions *user.UserPermissionDTO) error {
 	uow := repository.NewUnitOfWork(service.DB)
 	defer uow.RollBack()
-	err := service.repository.GetByID(uow, &tempUser, "username = ?", requestedUserCredentials.Username)
+	err := service.repository.GetFirstWhere(uow, &tempUser, "username = ?", requestedUserCredentials.Username)
 	if err != nil {
 		service.log.Error(err)
 		return err
@@ -44,7 +46,25 @@ func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLogi
 		service.log.Error("Wrong Password")
 		return errors.New("Invalid User Credentials")
 	}
-
+	if tempUser.RoleID == uint(encrypt.AdminUserRoleID) {
+		permissions.IsSuperAdmin = true
+	} else if tempUser.RoleID == uint(encrypt.BankUserRoleID) {
+		tempBankUser := bank.BankUser{}
+		err = service.repository.GetFirstWhere(uow, &tempBankUser, "user_id=?", tempUser.ID)
+		if err != nil || tempBankUser.UserID == 0 {
+			service.log.Error(err)
+			return errors.New("Bank User donot have access to Any Bank")
+		}
+		permissions.BankId = tempBankUser.BankID
+	} else if tempUser.RoleID == uint(encrypt.ClientUserRoleID) {
+		tempClientUser := client.ClientUser{}
+		err = service.repository.GetFirstWhere(uow, &tempClientUser, "user_id=?", tempUser.ID)
+		if err != nil || tempClientUser.UserID == 0 {
+			service.log.Error(err)
+			return errors.New("Client User donot have access to Any Client")
+		}
+		permissions.BankId = tempClientUser.ClientID
+	}
 	uow.Commit()
 	return nil
 }

@@ -35,3 +35,8 @@ func (controller *TestController) RegisterRoutes(router *mux.Router) {
 func (controller *TestController) TestApi(w http.ResponseWriter, r *http.Request) {
 
 }
+
+func (controller *TestController) SeedData(w http.ResponseWriter, r *http.Request) {
+	// uow := repository.NewUnitOfWork(controller.TestService.DB)
+
+}

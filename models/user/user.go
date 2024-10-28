@@ -19,3 +19,9 @@ type UserLoginParamDTO struct {
 	Username string ` json:"username"  validate:"required"` // unique username
 	Password string `json:"password"  validate:"required"`
 }
+
+type UserPermissionDTO struct {
+	BankId       uint `json:"bank_id"  ` // unique username
+	ClientId     uint `json:"client_id" `
+	IsSuperAdmin bool `json:"is_super_admin"`
+}

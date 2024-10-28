@@ -15,10 +15,11 @@ var BankUserRoleID = 2
 var ClientUserRoleID = 3
 
 type Claims struct {
-	UserId   uint `json:userId`
-	RoleId   uint `json:roleId`
-	BankId   uint `json:bankId,omitempty`
-	ClientId uint `json:clientId,omitempty`
+	UserId       uint `json:"userId"`
+	RoleId       uint `json:"roleId"`
+	BankId       uint `json:"bankId,omitempty"`
+	ClientId     uint `json:"clientId,omitempty"`
+	isSuperAdmin bool `json:"is_super_admin,omitempty"`
 	jwt.StandardClaims
 }
 
@@ -39,7 +40,7 @@ func CheckHashWithPassword(password string, hash string) bool {
 	return true
 }
 
-func GetJwtFromData(userId uint, RoleId uint) (string, error) {
+func GetJwtFromData(userId uint, RoleId uint, BankId uint, ClientId uint, isSuperAdmin bool) (string, error) {
 	claims := &Claims{UserId: userId, RoleId: RoleId}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	finalToken, err := token.SignedString([]byte(signingKey))

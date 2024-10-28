@@ -24,3 +24,9 @@ func NewUserService(
 		log:        log,
 	}
 }
+
+// func (service *UserService) CreateUser(user *user.User) {
+// 	uow := repository.NewUnitOfWork(service.DB)
+// 	defer uow.
+
+// }
