@@ -19,12 +19,12 @@ type User struct {
 
 type UserLoginInfo struct {
 	gorm.Model
-	UserId    string    `gorm:"not null" json:"user_id"`
-	UserName  string    `gorm:"not null" json:"username"`
-	IsActive  bool      `gorm:"default:true" json:"is_active"`
-	RoleID    uint      `gorm:"not null" json:"role_id"`
-	LoginTime time.Time `gorm:"not null" json:"login_time"`
-	Role      Role      `gorm:"foreignkey:RoleID;association_foreignkey:ID" json:"role"`
+	UserId     uint      `gorm:"not null" json:"user_id"`
+	UserName   string    `gorm:"not null" json:"username"`
+	IsActive   bool      `gorm:"default:true" json:"is_active"`
+	RoleID     uint      `gorm:"not null" json:"role_id"`
+	LoginTime  time.Time `gorm:"not null" json:"login_time"`
+	LogoutTime time.Time `gorm:"default:null" json:"logout_time"`
 }
 type UserLoginParamDTO struct {
 	Username string ` json:"username"  validate:"required"` // unique username

@@ -15,11 +15,12 @@ var BankUserRoleID = 2
 var ClientUserRoleID = 3
 
 type Claims struct {
-	UserId       uint `json:"userId"`
-	RoleId       uint `json:"roleId"`
-	BankId       uint `json:"bankId,omitempty"`
-	ClientId     uint `json:"clientId,omitempty"`
-	IsSuperAdmin bool `json:"is_super_admin,omitempty"`
+	UserId         uint `json:"userId"`
+	RoleId         uint `json:"roleId"`
+	BankId         uint `json:"bankId,omitempty"`
+	ClientId       uint `json:"clientId,omitempty"`
+	IsSuperAdmin   bool `json:"is_super_admin,omitempty"`
+	LoginSessionId uint `json:"login_session_id"`
 	jwt.StandardClaims
 }
 
@@ -40,8 +41,8 @@ func CheckHashWithPassword(password string, hash string) bool {
 	return true
 }
 
-func GetJwtFromData(userId uint, RoleId uint, BankId uint, ClientId uint, isSuperAdmin bool) (string, error) {
-	claims := &Claims{UserId: userId, RoleId: RoleId, BankId: BankId, ClientId: ClientId, IsSuperAdmin: isSuperAdmin}
+func GetJwtFromData(userId uint, RoleId uint, BankId uint, ClientId uint, isSuperAdmin bool, login_session_id uint) (string, error) {
+	claims := &Claims{UserId: userId, RoleId: RoleId, BankId: BankId, ClientId: ClientId, IsSuperAdmin: isSuperAdmin, LoginSessionId: login_session_id}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	finalToken, err := token.SignedString([]byte(signingKey))
 	return finalToken, err

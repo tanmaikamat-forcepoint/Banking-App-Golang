@@ -8,6 +8,7 @@ import (
 	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
 	"errors"
+	"time"
 
 	"github.com/jinzhu/gorm"
 )
@@ -30,7 +31,7 @@ func NewAuthService(
 	}
 }
 
-func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLoginParamDTO, tempUser *user.User, permissions *user.UserPermissionDTO) error {
+func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLoginParamDTO, tempUser *user.User, permissions *user.UserPermissionDTO, loginSessionId *uint) error {
 	uow := repository.NewUnitOfWork(service.DB)
 	defer uow.RollBack()
 	err := service.repository.GetFirstWhere(uow, &tempUser, "username = ?", requestedUserCredentials.Username)
@@ -65,6 +66,22 @@ func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLogi
 		}
 		permissions.ClientId = tempClientUser.ClientID
 	}
+
+	tempSession := user.UserLoginInfo{
+		UserId:    tempUser.ID,
+		UserName:  tempUser.Username,
+		IsActive:  true,
+		RoleID:    tempUser.RoleID,
+		LoginTime: time.Now(),
+	}
+	err = service.repository.Add(uow, &tempSession)
+	if err != nil {
+		return err
+	}
+	service.log.Info(tempSession.ID)
+	*loginSessionId = tempSession.ID
+
+	service.log.Info(*loginSessionId)
 	uow.Commit()
 	return nil
 }

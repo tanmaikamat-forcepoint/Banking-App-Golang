@@ -43,6 +43,7 @@ func (ctrl *PaymentController) RegisterRoutes(
 	subRouter.HandleFunc("/make_payment", ctrl.CreatePaymentRequest).Methods(http.MethodPost)
 	subRouter.HandleFunc("/payments_requests", ctrl.GetAllPaymentRequestForClient).Methods(http.MethodGet)
 	subRouter.HandleFunc("/payments", ctrl.GetAllPaymentRequestForClient).Methods(http.MethodGet)
+
 }
 
 func (ctrl *PaymentController) Todo(w http.ResponseWriter, r *http.Request) {
