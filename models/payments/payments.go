@@ -21,7 +21,7 @@ type Payment struct {
 	CreditTransaction   transaction.Transaction `gorm:"foreignkey:CreditTransactionID"`
 	DebitTransactionID  uint                    `gorm:"not null"`
 	DebitTransaction    transaction.Transaction `gorm:"foreignkey:DebitTransactionID"`
-	Amount              float64                 `gorm:"not null"`
+	PaymentAmount       float64                 `gorm:"not null"`
 	Status              string                  `gorm:"default:'Pending'"` //// 'Pending', 'Approved', 'Rejected'
 	CreatedByUserId     uint                    `gorm:"not null"`
 	ApprovedByUserId    uint                    `gorm:"not null"`
@@ -37,18 +37,19 @@ type PaymentRequest struct {
 	ReceiverClient   client.Client `gorm:"foreignkey:ReceiverClientID"`
 	AuthorizerBankId uint          `gorm:"not null"`
 	AuthorizedBank   bank.Bank     `gorm:"foreignkey:AuthorizedBankID"`
-	Amount           float64       `gorm:"not null"`
+	PaymentAmount    float64       `gorm:"not null"`
+	Status           string        `gorm:"default:'Pending'"` // Approve or Reject Payment - BankUser will decide
 	Resolved         bool          `gorm:"default:true"`
 	CreatedByUserId  uint          `gorm:"not null"`
 	CreatedByUser    user.User     `gorm:"foreignkey:CreatedByUserId"`
 }
 type PaymentRequestDTO struct {
-	Amount        float64 `json:"amount"`
+	PaymentAmount float64 `json:"amount"`
 	BeneficiaryId uint    `json:"beneficiary_id"`
 }
 
 type PaymentResponseDTO struct {
-	Amount        float64 `json:"amount"`
+	PaymentAmount float64 `json:"amount"`
 	ClientId      uint    `json:"client_id"`
 	PaymentId     uint    `json:"payment_id"`
 	PaymentStatus uint    `json:"payment_status"`

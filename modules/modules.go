@@ -25,6 +25,8 @@ type ModuleConfig interface {
 
 func RegisterAllModules(appObj *app.App) {
 	RegisterUserModule(appObj)
+	RegisterBankModule(appObj)
+	RegisterBankUserModule(appObj)
 
 }
 

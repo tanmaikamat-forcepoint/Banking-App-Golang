@@ -14,3 +14,10 @@ type User struct {
 	RoleID   uint   `gorm:"not null" json:"role_id"`
 	Role     Role   `gorm:"foreignkey:RoleID;association_foreignkey:ID" json:"role"`
 }
+
+type UserDTO struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+}

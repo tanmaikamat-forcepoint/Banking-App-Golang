@@ -4,6 +4,7 @@ import (
 	"bankManagement/app"
 	"bankManagement/modules"
 	"bankManagement/repository"
+	"bankManagement/seeder"
 	"bankManagement/utils/log"
 	"os"
 	"sync"
@@ -25,6 +26,7 @@ func main() {
 		db.Close()
 		log.Error("Database Closed")
 	}()
+	seeder.SeedRoles(db)
 	wg := NewWaitGroup()
 	repo := NewRepository()
 	appObj := app.NewApp(name, db, log, wg, repo)
