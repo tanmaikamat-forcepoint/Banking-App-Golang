@@ -162,6 +162,30 @@ func (srv *PaymentService) GetAllPaymentRequest(clientId uint, requests *[]payme
 	}
 
 	err = srv.repository.GetAll(uow, requests,
+		srv.repository.Preload("ReceiverClient"),
+		srv.repository.Filter("sender_client_id=?", clientId),
+	)
+
+	if err != nil {
+		return err
+	}
+	//Balance not deducted as payment is not accepted yet
+	uow.Commit()
+	return nil
+
+}
+
+func (srv *PaymentService) GetAllPaymentsProcessed(clientId uint, requests *[]payments.Payment) error {
+	uow := repository.NewUnitOfWork(srv.DB)
+	defer uow.RollBack()
+
+	tempSender := client.Client{}
+	err := srv.repository.GetByID(uow, &tempSender, clientId)
+	if err != nil {
+		return err
+	}
+
+	err = srv.repository.GetAll(uow, requests,
 		srv.repository.Preload("clients"),
 		srv.repository.Filter("sender_client_id=?", clientId),
 	)

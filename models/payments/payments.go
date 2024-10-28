@@ -31,8 +31,8 @@ type Payment struct {
 
 type PaymentRequest struct {
 	gorm.Model
-	SenderClientID   uint          `gorm:"not null" json:"received_client_id"`
-	SenderClient     client.Client `gorm:"foreignkey:SenderClientID" json:"-"`
+	SenderClientID uint `gorm:"not null" json:"sender_client_id"`
+	// SenderClient     client.Client `gorm:"foreignkey:SenderClientID" json:"-"`
 	ReceiverClientID uint          `gorm:"not null"  json:"received_client_id"`
 	ReceiverClient   client.Client `gorm:"foreignkey:ReceiverClientID" json:"receiver"`
 	AuthorizerBankId uint          `gorm:"not null"  json:"authorized_bank_id"`

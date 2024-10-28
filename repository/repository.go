@@ -11,7 +11,7 @@ type Repository interface {
 	Add(uow *UOW, out interface{}) error
 	Limit(limit interface{}) QueryProcessor
 	Offset(limit interface{}) QueryProcessor
-	Preload(table string, condition ...interface{}) QueryProcessor
+	Preload(field string, condition ...interface{}) QueryProcessor
 	Filter(condition string, args ...interface{}) QueryProcessor
 	Count(limit, offset int, totalCount *int) QueryProcessor
 	Update(uow *UOW, updated_value interface{}) error
