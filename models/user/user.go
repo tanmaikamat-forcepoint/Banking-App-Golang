@@ -26,6 +26,13 @@ type UserLoginInfo struct {
 	LoginTime  time.Time `gorm:"not null" json:"login_time"`
 	LogoutTime time.Time `gorm:"default:null" json:"logout_time"`
 }
+type UserDTO struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+}
+
 type UserLoginParamDTO struct {
 	Username string ` json:"username"  validate:"required"` // unique username
 	Password string `json:"password"  validate:"required"`
