@@ -15,3 +15,10 @@ type Transaction struct {
 	TransactionAmount float64       `gorm:"not null" json:"transaction_amount"`
 	TransactionStatus string        `gorm:"default:'Pending';not null" json:"transaction_status"`
 }
+
+var TransactionDebit = "Debit"
+var TransactionCredit = "Credit"
+
+var TransactionStatusPending = "Pending"
+var TransactionStatusApproved = "Approved"
+var TransactionStatusRejected = "Rejected"

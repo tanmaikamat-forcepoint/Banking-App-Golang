@@ -51,12 +51,22 @@ func (ctrl *AuthController) LoginApi(w http.ResponseWriter, r *http.Request) {
 	}
 	//
 	var authenticatedUser = &user.User{}
-	err = ctrl.AuthService.LoginRequest(loginCreds, authenticatedUser)
+	permissions := user.UserPermissionDTO{
+		BankId:       0,
+		ClientId:     0,
+		IsSuperAdmin: false,
+	}
+	var loginSessionId uint = 0
+	err = ctrl.AuthService.LoginRequest(loginCreds, authenticatedUser, &permissions, &loginSessionId)
 	if err != nil {
 		errorsUtils.SendErrorWithCustomMessage(w, err.Error(), 400)
 		return
 	}
-	token, err := encrypt.GetJwtFromData(authenticatedUser.ID, authenticatedUser.RoleID)
+	if loginSessionId == 0 {
+		errorsUtils.SendErrorWithCustomMessage(w, "Cannot Created a Session. Error", 400)
+		return
+	}
+	token, err := encrypt.GetJwtFromData(authenticatedUser.ID, authenticatedUser.RoleID, permissions.BankId, permissions.ClientId, permissions.IsSuperAdmin, loginSessionId)
 	if err != nil {
 		errorsUtils.SendErrorWithCustomMessage(w, err.Error(), 400)
 		return

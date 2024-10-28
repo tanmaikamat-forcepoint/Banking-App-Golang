@@ -11,6 +11,7 @@ import (
 	"bankManagement/models/salaryDisbursement"
 	"bankManagement/models/transaction"
 	"bankManagement/models/user"
+	"bankManagement/utils/encrypt"
 
 	"github.com/gorilla/mux"
 )
@@ -27,6 +28,7 @@ func RegisterAllModules(appObj *app.App) {
 	RegisterAuthModule(appObj)
 	RegisterTestModule(appObj)
 	RegisterUserModule(appObj)
+	RegisterClientModule(appObj)
 
 	RegisterBankModule(appObj)
 	RegisterBankUserModule(appObj)
@@ -68,9 +70,34 @@ func RegisterTableMigrations(appObj *app.App) {
 
 func SeedData(appObj *app.App) {
 	data := []interface{}{
-		&user.Role{RoleName: "SuperAdmin"},
-		&user.Role{RoleName: "Bank User"},
-		&user.Role{RoleName: "Client User"},
+		// &user.Role{RoleName: "SuperAdmin"},
+		// &user.Role{RoleName: "Bank User"},
+		// &user.Role{RoleName: "Client User"},
+		// &user.User{
+		// 	Username: "bank_user",
+		// 	Password: encrypt.HashPassword("admin@123"),
+		// 	Email:    "bank@gmail.com",
+		// 	IsActive: true,
+		// 	Name:     "Bank User",
+		// 	RoleID:   uint(encrypt.BankUserRoleID),
+		// },
+		// &user.User{
+		// 	Username: "client_user",
+		// 	Password: encrypt.HashPassword("admin@123"),
+		// 	Email:    "client@gmail.com",
+		// 	IsActive: true,
+		// 	Name:     "Client User",
+		// 	RoleID:   uint(encrypt.ClientUserRoleID),
+		// },
+
+		&user.User{
+			Username: "client_user_tcs",
+			Password: encrypt.HashPassword("admin@123"),
+			Email:    "client_tcs@gmail.com",
+			IsActive: true,
+			Name:     "Client User TCS",
+			RoleID:   uint(encrypt.ClientUserRoleID),
+		},
 	}
 
 	for _, entry := range data {

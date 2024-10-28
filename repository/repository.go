@@ -6,13 +6,15 @@ import (
 
 type Repository interface {
 	GetAll(uow *UOW, out interface{}, queryProcessors ...QueryProcessor) error
-	GetByID(uow *UOW, out interface{}, where ...interface{}) error
+	GetByID(uow *UOW, out interface{}, id ...interface{}) error
+	GetFirstWhere(uow *UOW, out interface{}, where ...interface{}) error
 	Add(uow *UOW, out interface{}) error
 	Limit(limit interface{}) QueryProcessor
 	Offset(limit interface{}) QueryProcessor
+	Preload(field string, condition ...interface{}) QueryProcessor
 	Filter(condition string, args ...interface{}) QueryProcessor
 	Count(limit, offset int, totalCount *int) QueryProcessor
-	Update(uow *UOW, updated_value interface{}, id interface{}) error
+	Update(uow *UOW, updated_value interface{}) error
 	DeleteById(uow *UOW, out interface{}, id interface{}) error
 }
 
@@ -60,7 +62,11 @@ func (g *GormRepositoryMySQL) GetAll(uow *UOW, out interface{}, queryProcessors 
 	return db.Find(out).Error
 
 }
-func (g *GormRepositoryMySQL) GetByID(uow *UOW, out interface{}, where ...interface{}) error {
+func (g *GormRepositoryMySQL) GetByID(uow *UOW, out interface{}, id ...interface{}) error {
+	return uow.DB.First(out, id).Error
+
+}
+func (g *GormRepositoryMySQL) GetFirstWhere(uow *UOW, out interface{}, where ...interface{}) error {
 	return uow.DB.First(out, where...).Error
 
 }
@@ -89,7 +95,7 @@ func (g *GormRepositoryMySQL) Filter(condition string, args ...interface{}) Quer
 		return db, nil
 	}
 }
-func (g *GormRepositoryMySQL) Update(uow *UOW, updated_value interface{}, id interface{}) error {
+func (g *GormRepositoryMySQL) Update(uow *UOW, updated_value interface{}) error {
 	return uow.DB.Save(updated_value).Error
 }
 
@@ -97,6 +103,13 @@ func (g *GormRepositoryMySQL) DeleteById(uow *UOW, out interface{}, id interface
 	// var tempInt interface{}
 	// output:=g.GetByID(uow)
 	return uow.DB.Delete(out, id).Error
+}
+func (g *GormRepositoryMySQL) Preload(table string, condition ...interface{}) QueryProcessor {
+
+	return func(db *gorm.DB, out interface{}) (*gorm.DB, error) {
+		db = db.Preload(table, condition...)
+		return db, nil
+	}
 }
 
 type UOW struct {

@@ -16,7 +16,9 @@ func SendInvalidAuthError(w http.ResponseWriter) {
 
 }
 
-func SendInvalidBodyError(w *http.ResponseWriter) {
+func SendInvalidBodyError(w http.ResponseWriter) {
+
+	SendErrorWithCustomMessage(w, "Invalid Body", http.StatusBadRequest)
 
 }
 

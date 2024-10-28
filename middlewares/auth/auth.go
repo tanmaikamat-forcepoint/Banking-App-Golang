@@ -1,12 +1,16 @@
 package auth
 
 import (
+	"bankManagement/constants"
 	"bankManagement/utils/encrypt"
 	errorsUtils "bankManagement/utils/errors"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 func AuthenticationMiddleware(next http.Handler) http.Handler {
@@ -26,9 +30,50 @@ func AuthenticationMiddleware(next http.Handler) http.Handler {
 		}
 		fmt.Println("Claims", claims)
 
-		ctx := context.WithValue(r.Context(), "claims", claims)
+		ctx := context.WithValue(r.Context(), constants.ClaimKey, claims)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func(w http.ResponseWriter, r *http.Request) {
+			err := recover()
+			if err != nil {
+				fmt.Println(err)
+				errorsUtils.SendErrorWithCustomMessage(w, err.(error).Error(), http.StatusUnauthorized)
+				return
+			}
+		}(w, r)
+		fmt.Println("Admin Validation Middleware Called")
+		fmt.Print(r.Context())
+		claims := r.Context().Value("claims").(*encrypt.Claims)
+		fmt.Print(claims)
+
+		if claims.ClientId == 0 {
+			errorsUtils.SendErrorWithCustomMessage(w, "Client Privileges Denied", http.StatusUnauthorized)
+			return
+		}
+
+		requested_client_access, ok := mux.Vars(r)["client_id"]
+		if !ok {
+			errorsUtils.SendErrorWithCustomMessage(w, "Client Id not found. Please put Client Id in Path", http.StatusUnauthorized)
+			return
+		}
+		requested_client_access_int, err := strconv.Atoi(requested_client_access)
+		if err != nil {
+			errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if requested_client_access_int != int(claims.ClientId) {
+			errorsUtils.SendErrorWithCustomMessage(w, "You are not authorized to access this client", http.StatusUnauthorized)
+			return
+		}
+		// ctx := context.WithValue(r.Context(), constants.ClaimsAdminKey, admin)
+
+		next.ServeHTTP(w, r)
 	})
 }
 

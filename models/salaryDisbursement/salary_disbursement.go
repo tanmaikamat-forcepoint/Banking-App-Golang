@@ -20,3 +20,7 @@ type SalaryDisbursement struct {
 	CreatedByUserId uint              `gorm:"not null"`
 	CreatedByUser   user.User         `gorm:"foreignkey:CreatedByUserId"`
 }
+
+var DisbursementStatusApproved = "Approved"
+var DisbursementStatusPending = "Pending"
+var DisbursementStatusRejected = "Rejected"
