@@ -31,8 +31,9 @@ func main() {
 	appObj.Init()
 	modules.RegisterTableMigrations(appObj)
 	modules.RegisterAllModules(appObj)
+	// email.GetSMTPService().SendEmail("Temp Email", "This is temp Email", "crazinessspeaks@gmail.com")
 
-	// modules.SeedData(appObj)
+	modules.SeedData(appObj)
 	appObj.StartServer()
 
 }
