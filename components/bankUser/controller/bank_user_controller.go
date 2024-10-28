@@ -2,9 +2,12 @@ package controller
 
 import (
 	"bankManagement/components/bankUser/service"
+	"bankManagement/constants"
 	"bankManagement/middleware"
+	"bankManagement/middlewares/auth"
 	"bankManagement/models/client"
 	"bankManagement/models/document"
+	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
 	"encoding/json"
 	"errors"
@@ -30,8 +33,8 @@ func NewBankUserController(bankUserService *service.BankUserService, log log.Web
 }
 
 func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
-	clientRouter := router.PathPrefix("/clients").Subrouter()
-	clientRouter.Use(middleware.ValidateBankUserPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
+	clientRouter := router.PathPrefix("/banks/{bank_id}/client").Subrouter()
+	clientRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
 	clientRouter.HandleFunc("/", controller.CreateClient).Methods("POST")
 	clientRouter.HandleFunc("/{id}", controller.GetClientByID).Methods("GET")
 	clientRouter.HandleFunc("/", controller.GetAllClients).Methods("GET")
@@ -58,6 +61,7 @@ func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
 // // CREATE CLIENT
 func (controller *BankUserController) CreateClient(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("CreateClient called")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	clientDTO := client.ClientDTO{}
 	if err := json.NewDecoder(r.Body).Decode(&clientDTO); err != nil {
@@ -70,7 +74,7 @@ func (controller *BankUserController) CreateClient(w http.ResponseWriter, r *htt
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
+	clientDTO.BankID = claims.BankId
 	//service call
 	if err := controller.BankUserService.CreateClient(clientDTO); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -150,7 +154,9 @@ func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *ht
 func (controller *BankUserController) GetAllClients(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("GetAllClients controller called ...")
 
-	clients, err := controller.BankUserService.GetAllClients()
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+
+	clients, err := controller.BankUserService.GetAllClients(claims.BankId)
 	if err != nil {
 		http.Error(w, "Failed to retrieve clients", http.StatusInternalServerError) //err.Error()
 		return

@@ -116,7 +116,7 @@ func (srv *PaymentService) CreatePaymentRequest(clientId uint, createdByUserId u
 	defer uow.RollBack()
 
 	tempPaymentRequest := payments.PaymentRequest{
-		Amount:         paymentRequest.Amount,
+		PaymentAmount:  paymentRequest.PaymentAmount,
 		SenderClientID: clientId,
 	}
 	tempSender := client.Client{}
@@ -125,7 +125,7 @@ func (srv *PaymentService) CreatePaymentRequest(clientId uint, createdByUserId u
 		return err
 	}
 
-	if tempSender.Balance < paymentRequest.Amount {
+	if tempSender.Balance < paymentRequest.PaymentAmount {
 		return errors.New("Insufficient Balance to Transact")
 	}
 

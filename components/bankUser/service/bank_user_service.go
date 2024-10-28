@@ -160,14 +160,16 @@ func (s *BankUserService) GetClientByID(id uint) (*client.Client, error) {
 }
 
 // / GET ALL CLIENTS
-func (s *BankUserService) GetAllClients() ([]client.Client, error) {
+func (s *BankUserService) GetAllClients(bankId uint) ([]client.Client, error) {
 	fmt.Println("GetAllClients service called")
 
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
 	var clients []client.Client
-	err := s.repository.GetAll(uow, &clients)
+	err := s.repository.GetAll(uow, &clients,
+		s.repository.Filter("bank_id=?", bankId),
+	)
 	if err != nil {
 		fmt.Println("Error in retrieving clients: ", err)
 		return nil, err
@@ -243,7 +245,7 @@ func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) e
 	}
 
 	///updated client record saved
-	if err := s.repository.Update(uow, &existingClient, id); err != nil {
+	if err := s.repository.Update(uow, &existingClient); err != nil {
 		return err
 	}
 
@@ -499,7 +501,7 @@ func (s *BankUserService) UpdatePaymentRequest(paymentRequest payments.PaymentRe
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
-	err := s.repository.Update(uow, &paymentRequest, paymentRequest.ID)
+	err := s.repository.Update(uow, &paymentRequest)
 	if err != nil {
 		return err
 	}

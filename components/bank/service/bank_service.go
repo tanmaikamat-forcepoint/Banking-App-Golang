@@ -4,6 +4,7 @@ import (
 	"bankManagement/models/bank"
 	"bankManagement/models/user"
 	"bankManagement/repository"
+	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
 
 	"fmt"
@@ -108,11 +109,6 @@ func (s *BankService) CreateBank(bankAndUserEntityDTO bank.BankAndUserDTO) error
 		return err
 	}
 
-	var bankUserRole user.Role
-	if err := s.DB.Where("role_name = ?", "BANK_USER").First(&bankUserRole).Error; err != nil {
-		return fmt.Errorf("BANK_USER role not found: %w", err)
-	}
-
 	hashedPassword, err := HashPassword(bankAndUserEntityDTO.Password)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
@@ -125,7 +121,7 @@ func (s *BankService) CreateBank(bankAndUserEntityDTO bank.BankAndUserDTO) error
 		Name:     bankAndUserEntityDTO.BankName, // Using the BankName as User's Name
 		Email:    bankAndUserEntityDTO.Email,    // Derived email
 		IsActive: true,
-		RoleID:   bankUserRole.ID,
+		RoleID:   uint(encrypt.BankUserRoleID),
 	}
 	if err := s.repository.Add(uow, userEntity); err != nil {
 		return fmt.Errorf("failed to create BankUser: %w", err)
@@ -218,4 +214,3 @@ func (s *BankService) DeleteBank(id uint) error {
 	uow.Commit()
 	return nil
 }
-

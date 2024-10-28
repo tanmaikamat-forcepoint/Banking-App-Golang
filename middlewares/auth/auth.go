@@ -77,6 +77,47 @@ func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func ValidateBankPermissionsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func(w http.ResponseWriter, r *http.Request) {
+			err := recover()
+			if err != nil {
+				fmt.Println(err)
+				errorsUtils.SendErrorWithCustomMessage(w, err.(error).Error(), http.StatusUnauthorized)
+				return
+			}
+		}(w, r)
+		fmt.Println("Bank Admin Validation Middleware Called")
+		fmt.Print(r.Context())
+		claims := r.Context().Value("claims").(*encrypt.Claims)
+		fmt.Print(claims)
+
+		if claims.BankId == 0 {
+			errorsUtils.SendErrorWithCustomMessage(w, "Bank Privileges Denied", http.StatusUnauthorized)
+			return
+		}
+
+		requested_bank_access, ok := mux.Vars(r)["bank_id"]
+		if !ok {
+			errorsUtils.SendErrorWithCustomMessage(w, "Bank Id not found. Please put Bank Id in Path", http.StatusUnauthorized)
+			return
+		}
+		requested_bank_access_int, err := strconv.Atoi(requested_bank_access)
+		if err != nil {
+			errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if requested_bank_access_int != int(claims.BankId) {
+			errorsUtils.SendErrorWithCustomMessage(w, "You are not authorized to access this client", http.StatusUnauthorized)
+			return
+		}
+		// ctx := context.WithValue(r.Context(), constants.ClaimsAdminKey, admin)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // func ValidateAdminPermissionsMiddleware(next http.Handler) http.Handler {
 // 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 // 		defer func(w http.ResponseWriter, r *http.Request) {
