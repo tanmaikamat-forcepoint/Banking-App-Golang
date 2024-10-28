@@ -3,12 +3,12 @@ package controller
 import (
 	"bankManagement/components/client/service"
 	"bankManagement/constants"
+	"bankManagement/middlewares/auth"
 	"bankManagement/models/employee"
 	"bankManagement/utils/encrypt"
 	errorsUtils "bankManagement/utils/errors"
 	"bankManagement/utils/log"
 	"bankManagement/utils/web"
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -33,6 +33,7 @@ func NewClientController(
 func (ctrl *ClientController) RegisterRoutes(
 	router *mux.Router) {
 	subRouter := router.PathPrefix("/clients/{client_id}/").Subrouter()
+	subRouter.Use(auth.AuthenticationMiddleware, auth.ValidateClientPermissionsMiddleware)
 	subRouter.HandleFunc("/employees", ctrl.CreateEmployee).Methods(http.MethodPost)
 	subRouter.HandleFunc("/employees", ctrl.GetAllEmployees).Methods(http.MethodGet)
 	subRouter.HandleFunc("/employees/{employee_id}", ctrl.GetAllEmployees).Methods(http.MethodGet)
@@ -77,8 +78,12 @@ func (ctrl *ClientController) CreateEmployee(w http.ResponseWriter, r *http.Requ
 		errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	json.NewEncoder(w).Encode(employeeDetails)
+	web.SendResponse(w,
+		web.WebResponse{
+			StatusCode: http.StatusCreated,
+			Message:    "Employee Created Successfully",
+			Data:       employeeDetails,
+		})
 
 }
 
@@ -111,7 +116,12 @@ func (ctrl *ClientController) UpdateEmployee(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	json.NewEncoder(w).Encode(employeeDetails)
+	web.SendResponse(w,
+		web.WebResponse{
+			StatusCode: http.StatusAccepted,
+			Message:    "Employee Update Successfully",
+			Data:       employeeDetails,
+		})
 }
 
 func (ctrl *ClientController) DeleteEmployeeById(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +143,11 @@ func (ctrl *ClientController) DeleteEmployeeById(w http.ResponseWriter, r *http.
 		errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
+	web.SendResponse(w,
+		web.WebResponse{
+			StatusCode: http.StatusOK,
+			Message:    "Employee Deleted Successfully",
+		})
 }
 
 func (ctrl *ClientController) GetAllEmployees(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +169,13 @@ func (ctrl *ClientController) GetAllEmployees(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		errorsUtils.SendErrorWithCustomMessage(w, web.GetValidationError(err), http.StatusBadRequest)
 	}
-	json.NewEncoder(w).Encode(employeeDetails)
+	web.SendResponse(w,
+		web.WebResponse{
+			StatusCode: http.StatusOK,
+			Message:    "Employee Retrieved Successfully",
+			Data:       employeeDetails,
+		})
+	// json.NewEncoder(w).Encode(employeeDetails)
 
 }
 
@@ -171,5 +191,10 @@ func (ctrl *ClientController) DisburseSalary(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		errorsUtils.SendErrorWithCustomMessage(w, web.GetValidationError(err), http.StatusBadRequest)
 	}
+	web.SendResponse(w,
+		web.WebResponse{
+			StatusCode: http.StatusCreated,
+			Message:    "Salary Disbursed Successfully",
+		})
 
 }
