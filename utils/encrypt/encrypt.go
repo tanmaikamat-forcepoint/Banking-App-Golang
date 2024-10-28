@@ -19,7 +19,7 @@ type Claims struct {
 	RoleId       uint `json:"roleId"`
 	BankId       uint `json:"bankId,omitempty"`
 	ClientId     uint `json:"clientId,omitempty"`
-	isSuperAdmin bool `json:"is_super_admin,omitempty"`
+	IsSuperAdmin bool `json:"is_super_admin,omitempty"`
 	jwt.StandardClaims
 }
 
@@ -41,7 +41,7 @@ func CheckHashWithPassword(password string, hash string) bool {
 }
 
 func GetJwtFromData(userId uint, RoleId uint, BankId uint, ClientId uint, isSuperAdmin bool) (string, error) {
-	claims := &Claims{UserId: userId, RoleId: RoleId}
+	claims := &Claims{UserId: userId, RoleId: RoleId, BankId: BankId, ClientId: ClientId, IsSuperAdmin: isSuperAdmin}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	finalToken, err := token.SignedString([]byte(signingKey))
 	return finalToken, err

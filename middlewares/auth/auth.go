@@ -51,13 +51,13 @@ func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 		fmt.Print(claims.UserId)
 
 		if claims.ClientId == 0 {
-			errorsUtils.SendErrorWithCustomMessage(w, "Client Previlages Denied", http.StatusUnauthorized)
+			errorsUtils.SendErrorWithCustomMessage(w, "Client Privileges Denied", http.StatusUnauthorized)
 			return
 		}
 
 		requested_client_access, ok := mux.Vars(r)["client_id"]
 		if !ok {
-			errorsUtils.SendErrorWithCustomMessage(w, "Client Id not found. Please put Cliend Id in Path", http.StatusUnauthorized)
+			errorsUtils.SendErrorWithCustomMessage(w, "Client Id not found. Please put Client Id in Path", http.StatusUnauthorized)
 			return
 		}
 		requested_client_access_int, err := strconv.Atoi(requested_client_access)
@@ -67,7 +67,7 @@ func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 		}
 
 		if requested_client_access_int != int(claims.ClientId) {
-			errorsUtils.SendErrorWithCustomMessage(w, "You are not authorised to access this client", http.StatusUnauthorized)
+			errorsUtils.SendErrorWithCustomMessage(w, "You are not authorized to access this client", http.StatusUnauthorized)
 			return
 		}
 		// ctx := context.WithValue(r.Context(), constants.ClaimsAdminKey, admin)
