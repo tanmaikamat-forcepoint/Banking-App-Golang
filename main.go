@@ -33,6 +33,8 @@ func main() {
 	appObj.Init()
 	modules.RegisterTableMigrations(appObj)
 	modules.RegisterAllModules(appObj)
+
+	// modules.SeedData(appObj)
 	appObj.StartServer()
 
 }

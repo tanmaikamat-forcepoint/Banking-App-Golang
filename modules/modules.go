@@ -24,7 +24,10 @@ type ModuleConfig interface {
 }
 
 func RegisterAllModules(appObj *app.App) {
+	RegisterAuthModule(appObj)
+	RegisterTestModule(appObj)
 	RegisterUserModule(appObj)
+
 	RegisterBankModule(appObj)
 	RegisterBankUserModule(appObj)
 
@@ -46,7 +49,7 @@ func RegisterTableMigrations(appObj *app.App) {
 	documentConfig := document.DocumentConfig{DB: appObj.DB}
 
 	// Register each module's configuration in the correct order
-	RegisterAllConfigs(appObj, []ModuleConfig{
+	registerAllConfigs(appObj, []ModuleConfig{
 		&roleConfig,
 		&userConfig,
 		&bankConfig,
@@ -63,13 +66,26 @@ func RegisterTableMigrations(appObj *app.App) {
 
 }
 
-func RegisterAllRoutes(appObj *app.App, controllers []Controller) {
+func SeedData(appObj *app.App) {
+	data := []interface{}{
+		&user.Role{RoleName: "SuperAdmin"},
+		&user.Role{RoleName: "Bank User"},
+		&user.Role{RoleName: "Client User"},
+	}
+
+	for _, entry := range data {
+		appObj.Log.Info(appObj.DB.Create(entry).Error)
+	}
+	appObj.Log.Info("Database Seeding Completed")
+}
+
+func registerAllRoutes(appObj *app.App, controllers []Controller) {
 	for i := 0; i < len(controllers); i++ {
 		controllers[i].RegisterRoutes(appObj.Router)
 	}
 }
 
-func RegisterAllConfigs(appObj *app.App, configs []ModuleConfig) {
+func registerAllConfigs(appObj *app.App, configs []ModuleConfig) {
 	for i := 0; i < len(configs); i++ {
 		configs[i].TableMigration()
 	}

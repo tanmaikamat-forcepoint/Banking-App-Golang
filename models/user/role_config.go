@@ -10,4 +10,5 @@ type RoleConfig struct {
 
 func (config *RoleConfig) TableMigration() {
 	config.DB.AutoMigrate(&Role{})
+
 }
