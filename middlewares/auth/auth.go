@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bankManagement/constants"
 	"bankManagement/utils/encrypt"
 	errorsUtils "bankManagement/utils/errors"
 	"context"
@@ -29,7 +30,7 @@ func AuthenticationMiddleware(next http.Handler) http.Handler {
 		}
 		fmt.Println("Claims", claims)
 
-		ctx := context.WithValue(r.Context(), "claims", claims)
+		ctx := context.WithValue(r.Context(), constants.ClaimKey, claims)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -48,7 +49,7 @@ func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 		fmt.Println("Admin Validation Middleware Called")
 		fmt.Print(r.Context())
 		claims := r.Context().Value("claims").(*encrypt.Claims)
-		fmt.Print(claims.UserId)
+		fmt.Print(claims)
 
 		if claims.ClientId == 0 {
 			errorsUtils.SendErrorWithCustomMessage(w, "Client Privileges Denied", http.StatusUnauthorized)

@@ -2,7 +2,9 @@ package controller
 
 import (
 	"bankManagement/components/client/service"
+	"bankManagement/constants"
 	"bankManagement/models/employee"
+	"bankManagement/utils/encrypt"
 	errorsUtils "bankManagement/utils/errors"
 	"bankManagement/utils/log"
 	"bankManagement/utils/web"
@@ -158,20 +160,14 @@ func (ctrl *ClientController) GetAllEmployees(w http.ResponseWriter, r *http.Req
 }
 
 func (ctrl *ClientController) DisburseSalary(w http.ResponseWriter, r *http.Request) {
-	user_id := 8
-	//validations
-	id, ok := mux.Vars(r)["client_id"]
-	if !ok {
-		errorsUtils.SendErrorWithCustomMessage(w, "Client ID Not Found", http.StatusBadRequest)
-		return
-	}
-	client_id, err := strconv.Atoi(id)
-	if err != nil {
-		errorsUtils.SendErrorWithCustomMessage(w, "Client ID should be a int", http.StatusBadRequest)
-		return
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+	user_id := claims.UserId
+	client_id := claims.ClientId
+	if client_id == 0 || user_id == 0 {
+		errorsUtils.SendErrorWithCustomMessage(w, "Invalid JWT Token for Access", http.StatusBadRequest)
 	}
 
-	err = ctrl.ClientService.DisburseSalaryAllEmployees(uint(client_id), uint(user_id))
+	err := ctrl.ClientService.DisburseSalaryAllEmployees(uint(client_id), uint(user_id))
 	if err != nil {
 		errorsUtils.SendErrorWithCustomMessage(w, web.GetValidationError(err), http.StatusBadRequest)
 	}

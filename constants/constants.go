@@ -7,3 +7,4 @@ var AdminKeyValue = "admin"
 
 var BankUserKeyValue = "bank-user"
 var ClientUserKeyValue = "client-user"
+var ClaimKey = "claims"

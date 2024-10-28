@@ -63,7 +63,7 @@ func (service *AuthService) LoginRequest(requestedUserCredentials *user.UserLogi
 			service.log.Error(err)
 			return errors.New("Client User donot have access to Any Client")
 		}
-		permissions.BankId = tempClientUser.ClientID
+		permissions.ClientId = tempClientUser.ClientID
 	}
 	uow.Commit()
 	return nil
