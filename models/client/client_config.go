@@ -13,4 +13,3 @@ func (config *ClientConfig) TableMigration() {
 
 	config.DB.Model(&Client{}).AddForeignKey("bank_id", "banks(id)", "CASCADE", "CASCADE")
 }
-

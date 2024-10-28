@@ -15,7 +15,15 @@ type User struct {
 	Role     Role   `gorm:"foreignkey:RoleID;association_foreignkey:ID" json:"role"`
 }
 
+type UserDTO struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+}
+
 type UserLoginParamDTO struct {
 	Username string ` json:"username"  validate:"required"` // unique username
 	Password string `json:"password"  validate:"required"`
+
 }

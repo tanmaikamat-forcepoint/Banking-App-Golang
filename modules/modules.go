@@ -27,6 +27,10 @@ func RegisterAllModules(appObj *app.App) {
 	RegisterAuthModule(appObj)
 	RegisterTestModule(appObj)
 	RegisterUserModule(appObj)
+
+	RegisterBankModule(appObj)
+	RegisterBankUserModule(appObj)
+
 }
 
 func RegisterTableMigrations(appObj *app.App) {
