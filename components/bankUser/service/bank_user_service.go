@@ -460,14 +460,106 @@ func (s *BankUserService) ValidateBankUserAccessForDocument(bankUserID, bankID, 
 /////////////  Payment Approval Functions  //////////// Service /////
 
 // Approve Payment Request
-func (s *BankUserService) ApprovePaymentRequest(id uint) error {
-	paymentRequest, err := s.GetPaymentRequest(id)
+func (s *BankUserService) ApprovePaymentRequest(paymentId uint, approvedByUserId uint) error {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
+	//Getting Payment Request
+	paymentRequest := payments.PaymentRequest{}
+	err := s.repository.GetByID(uow, &paymentRequest, paymentId)
+	if err != nil {
+		return err
+	}
+	//Validating if user has access
+	bankUser := bank.BankUser{}
+	err = s.repository.GetFirstWhere(uow, &bankUser, "bank_id=? AND user_id=?", paymentRequest.AuthorizerBankId, approvedByUserId)
+	if err != nil {
+		return err
+	}
+	if bankUser.UserID != approvedByUserId || bankUser.UserID == 0 {
+		return errors.New("Unauthorized Access to Approve Request")
+	}
+	//Validating if User has valid balance
+	senderClient := client.Client{}
+	err = s.repository.GetByID(uow, &senderClient, paymentRequest.SenderClientID)
+	if err != nil {
+		return err
+	}
+	if senderClient.Balance < paymentRequest.PaymentAmount {
+		return errors.New("Cannot Approve the Payment as Balance Insufficient. Reject the Payment or Contact Client to update Balance")
+	}
+	//Creating New Payment Entry
+
+	paymentEntry := payments.Payment{
+		SenderClientID:   paymentRequest.SenderClientID,
+		ReceiverClientID: paymentRequest.ReceiverClientID,
+		AuthorizedBankID: paymentRequest.AuthorizerBankId,
+		// CreditTransactionID :,
+		// DebitTransactionID :,
+		PaymentAmount:    paymentRequest.PaymentAmount,
+		Status:           transaction.TransactionStatusApproved,
+		CreatedByUserId:  paymentRequest.CreatedByUserId,
+		ApprovedByUserId: approvedByUserId,
+	}
+	//Debit Transaction
+	debitTransaction := transaction.Transaction{
+		ClientID:          paymentRequest.SenderClientID,
+		TransactionType:   transaction.TransactionDebit,
+		PaymentType:       "Transfer",
+		TransactionAmount: paymentEntry.PaymentAmount,
+		TransactionStatus: transaction.TransactionStatusApproved,
+	}
+	err = s.repository.Add(uow, &debitTransaction)
+	if err != nil {
+		return err
+	}
+	senderClient.Balance -= paymentEntry.PaymentAmount
+	err = s.repository.Update(uow, &senderClient)
 	if err != nil {
 		return err
 	}
 
-	paymentRequest.Status = "Approved"
-	return s.UpdatePaymentRequest(*paymentRequest)
+	//credit Transaction
+	receiverClient := client.Client{}
+	err = s.repository.GetByID(uow, &receiverClient, paymentRequest.SenderClientID)
+	if err != nil {
+		return err
+	}
+	creditTransaction := transaction.Transaction{
+		ClientID:          paymentRequest.ReceiverClientID,
+		TransactionType:   transaction.TransactionCredit,
+		PaymentType:       "Transfer",
+		TransactionAmount: paymentEntry.PaymentAmount,
+		TransactionStatus: transaction.TransactionStatusApproved,
+	}
+	err = s.repository.Add(uow, &creditTransaction)
+	if err != nil {
+		return err
+	}
+	receiverClient.Balance += paymentEntry.PaymentAmount
+	err = s.repository.Update(uow, &receiverClient)
+	if err != nil {
+		return err
+	}
+
+	paymentEntry.CreditTransactionID = creditTransaction.ID
+	paymentEntry.DebitTransactionID = debitTransaction.ID
+
+	err = s.repository.Add(uow, &paymentEntry)
+	if err != nil {
+		return err
+	}
+	paymentRequest.Resolved = true
+	paymentRequest.Status = transaction.TransactionStatusApproved
+
+	err = s.repository.
+		Update(uow, &paymentRequest)
+	if err != nil {
+		return err
+	}
+
+	// paymentRequest.Status = "Approved"
+	uow.Commit()
+	return nil
 }
 
 // Reject payment Request

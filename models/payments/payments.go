@@ -22,26 +22,28 @@ type Payment struct {
 	DebitTransactionID  uint                    `gorm:"not null"`
 	DebitTransaction    transaction.Transaction `gorm:"foreignkey:DebitTransactionID"`
 	PaymentAmount       float64                 `gorm:"not null"`
-	Status              string                  `gorm:"default:'Pending'"` //// 'Pending', 'Approved', 'Rejected'
-	CreatedByUserId     uint                    `gorm:"not null"`
-	ApprovedByUserId    uint                    `gorm:"not null"`
-	CreatedByUser       user.User               `gorm:"foreignkey:CreatedByUserId"`
-	ApprovedByUser      user.User               `gorm:"foreignkey:ApprovedByUserId"`
+
+	Status           string    `gorm:"default:'Pending'"` //// 'Pending', 'Approved', 'Rejected'
+	CreatedByUserId  uint      `gorm:"not null"`
+	ApprovedByUserId uint      `gorm:"not null"`
+	CreatedByUser    user.User `gorm:"foreignkey:CreatedByUserId"`
+	ApprovedByUser   user.User `gorm:"foreignkey:ApprovedByUserId"`
 }
 
 type PaymentRequest struct {
 	gorm.Model
 	SenderClientID   uint          `gorm:"not null"`
-	SenderClient     client.Client `gorm:"foreignkey:SenderClientID"`
+	SenderClient     client.Client `gorm:"foreignkey:SenderClientID" json:"-"`
 	ReceiverClientID uint          `gorm:"not null"`
-	ReceiverClient   client.Client `gorm:"foreignkey:ReceiverClientID"`
+	ReceiverClient   client.Client `gorm:"foreignkey:ReceiverClientID"  json:"-"`
 	AuthorizerBankId uint          `gorm:"not null"`
-	AuthorizedBank   bank.Bank     `gorm:"foreignkey:AuthorizedBankID"`
-	PaymentAmount    float64       `gorm:"not null"`
+	AuthorizedBank   bank.Bank     `gorm:"foreignkey:AuthorizedBankID"  json:"-"`
+	PaymentAmount    float64       `gorm:"not null; column:amount"`
 	Status           string        `gorm:"default:'Pending'"` // Approve or Reject Payment - BankUser will decide
 	Resolved         bool          `gorm:"default:true"`
 	CreatedByUserId  uint          `gorm:"not null"`
-	CreatedByUser    user.User     `gorm:"foreignkey:CreatedByUserId"`
+	CreatedByUser    user.User     `gorm:"foreignkey:CreatedByUserId"  json:"-"`
+	PostApprovalNote string        `gorm:"default:null"`
 }
 type PaymentRequestDTO struct {
 	PaymentAmount float64 `json:"amount"`
