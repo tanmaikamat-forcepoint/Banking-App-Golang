@@ -32,66 +32,10 @@ func NewBankService(
 }
 
 // / create bank
-// // func (b *BankService) CreateBank(bankDTO bank.BankDTO) error {
-// func (s *BankService) CreateBank(bankDTO bank.BankDTO, bankUserDTO user.UserDTO) error {
-
-// 	fmt.Println("Bank Service called ...")
-// 	uow := repository.NewUnitOfWork(b.DB)
-// 	defer uow.RollBack()
-
-// 	// Validation input details - name,email
-// 	if err := b.ValidateBankDTO(bankDTO); err != nil {
-// 		return err
-// 	}
-
-// 	// Create Bank
-// 	bankEntity := &bank.Bank{
-// 		BankName:         bankDTO.BankName,
-// 		BankAbbreviation: bankDTO.BankAbbreviation,
-// 	}
-
-// 	if err := s.repository.Add(uow, bankEntity); err != nil {
-// 		return err
-// 	}
-
-// 	hashedPassword, err := HashPassword(bankUserDTO.Password)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to hash password: %w", err)
-// 	}
-
-// 	// Create User for BankUser
-// 	bankUserRole, err := s.getRoleByName("BANK_USER")
-// 	if err != nil {
-// 		return fmt.Errorf("BANK_USER role not found: %w", err)
-// 	}
-
-// 	bankUserEntity := &user.User{
-// 		Username: bankUserDTO.Username,
-// 		Password: hashedPassword, // Ensure password is hashed
-// 		Name:     bankUserDTO.Name,
-// 		Email:    bankUserDTO.Email,
-// 		IsActive: true,
-// 		RoleID:   bankUserRole.ID,
-// 	}
-// 	if err := s.repository.Add(uow, bankUserEntity); err != nil {
-// 		return fmt.Errorf("failed to create BankUser: %w", err)
-// 	}
-
-// 	// Link BankUser to Bank
-// 	bankUserLink := &bank.BankUser{
-// 		UserID: bankUserEntity.ID,
-// 		BankID: bankEntity.ID,
-// 	}
-// 	if err := s.repository.Add(uow, bankUserLink); err != nil {
-// 		return fmt.Errorf("failed to link BankUser to Bank: %w", err)
-// 	}
-
-// 	fmt.Println("Bank Service Finished ...")
-// 	uow.Commit()
-// 	return nil
-// }
-
 func (s *BankService) CreateBank(bankAndUserEntityDTO bank.BankAndUserDTO) error {
+
+	fmt.Println("Bank Service called ...")
+
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 

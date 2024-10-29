@@ -2,7 +2,7 @@ package controller
 
 import (
 	"bankManagement/components/bank/service"
-	"bankManagement/middleware"
+	"bankManagement/middlewares/auth"
 	"bankManagement/utils/log"
 	"encoding/json"
 	"errors"
@@ -31,7 +31,8 @@ func NewBankController(UserServcice *service.BankService, log log.WebLogger) *Ba
 
 func (controller *BankController) RegisterRoutes(router *mux.Router) {
 	bankRouter := router.PathPrefix("/banks").Subrouter()
-	bankRouter.Use(middleware.ValidateAdminPermissionsMiddleware) // SuperAdmin middleware
+	bankRouter.Use(auth.AuthenticationMiddleware, auth.ValidateAdminPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
+	// bankRouter.Use(middleware.ValidateAdminPermissionsMiddleware) // SuperAdmin middleware
 	bankRouter.HandleFunc("/", controller.CreateBank).Methods("POST")
 	bankRouter.HandleFunc("/", controller.GetAllBanks).Methods("GET")
 	bankRouter.HandleFunc("/{id}", controller.GetBankByID).Methods("GET")

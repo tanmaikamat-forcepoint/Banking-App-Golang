@@ -138,14 +138,17 @@ func (s *BankUserService) ValidateBankID(bankID uint) error {
 }
 
 // GET CLIENT BY ID
-func (s *BankUserService) GetClientByID(id uint) (*client.Client, error) {
+func (s *BankUserService) GetClientByID(id uint, bankId uint) (*client.Client, error) {
 	fmt.Println("Getting ClientID in Service...")
 
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
 	clientEntity := client.Client{}
-	err := s.repository.GetByID(uow, &clientEntity, id)
+	err := s.repository.GetByID(uow, &clientEntity,
+		s.repository.Filter("id = ?", id),
+		s.repository.Filter("bank_id = ?", bankId),
+	)
 	if err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			// Custom err msg
@@ -160,7 +163,7 @@ func (s *BankUserService) GetClientByID(id uint) (*client.Client, error) {
 }
 
 // / GET ALL CLIENTS
-func (s *BankUserService) GetAllClients(bankId uint) ([]client.Client, error) {
+func (s *BankUserService) GetAllClients(bankId uint) ([]client.Client, error) { //where to use this bankId
 	fmt.Println("GetAllClients service called")
 
 	uow := repository.NewUnitOfWork(s.DB)
@@ -180,22 +183,35 @@ func (s *BankUserService) GetAllClients(bankId uint) ([]client.Client, error) {
 	return clients, nil
 }
 
-// get ClientUser by clientID
-func (s *BankUserService) GetClientUserByClientID(clientID uint) *user.User {
+// get ClientUser by clientID & and BankID
+func (s *BankUserService) GetClientUserByClientID(clientID uint, bankID uint) (*user.User, error) {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
 
 	var clientUser client.ClientUser
-	err := s.DB.Where("client_id = ?", clientID).First(&clientUser).Error
-	if err != nil {
-		return nil
+	// err := s.DB.Where("client_id = ?", clientID).First(&clientUser).Error
+	if err := s.repository.GetFirstWhere(
+		uow,
+		&clientUser,
+		s.repository.Filter("client_id = ? AND bank_id = ?", clientID, bankID),
+	); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, fmt.Errorf("no client user found for client ID %d and bank ID %d", clientID, bankID)
+		}
+		return nil, err
 	}
 
 	var userEntity user.User
-	s.DB.Where("id = ?", clientUser.UserID).First(&userEntity)
-	return &userEntity
+	if err := s.repository.GetFirstWhere(uow, &userEntity, s.repository.Filter("id = ?", clientUser.UserID)); err != nil {
+		return nil, fmt.Errorf("user associated with client ID %d not found", clientID)
+	}
+
+	uow.Commit()
+	return &userEntity, nil
 }
 
 // / UPDATE CLIENT
-func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) error {
+func (s *BankUserService) UpdateClientByID(id uint, bankId uint, updatedData client.Client) error {
 	fmt.Println("UpdateClient service called ...")
 
 	uow := repository.NewUnitOfWork(s.DB)
@@ -203,8 +219,14 @@ func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) e
 
 	// check if it exists & fetch it
 	var existingClient client.Client
-	if err := s.repository.GetByID(uow, &existingClient, id); err != nil {
-		return errors.New("client not found")
+	if err := s.repository.GetByID(uow, &existingClient,
+		s.repository.Filter("id =?", id),
+		s.repository.Filter("bank_id =?", bankId),
+	); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return fmt.Errorf("client with ID %d not found or does not belong to the specified bank", id)
+		}
+		return err
 	}
 
 	// Updating fileds if BankUser wants that, otherwise i am keeping Old Values
@@ -214,12 +236,7 @@ func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) e
 	if updatedData.ClientEmail != "" {
 		existingClient.ClientEmail = updatedData.ClientEmail
 	}
-
-	// during update also bal > 1K
-	if updatedData.Balance > 0 {
-		if updatedData.Balance < 1000 {
-			return errors.New("balance must be at least 1000")
-		}
+	if updatedData.Balance > 0 { // balance cannot be negative, will not update
 		existingClient.Balance = updatedData.Balance
 	}
 
@@ -255,15 +272,18 @@ func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) e
 }
 
 // // DELETE CLIENT
-func (s *BankUserService) DeleteClientByID(id uint) error {
+func (s *BankUserService) DeleteClientByID(id uint, bankId uint) error {
 	fmt.Println("Deelte Client service called ...")
 
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
-	// Check for dependent ClientUser records
+	//// Check for dependent ClientUser records ON Clients (as ClientUser is made when we make a Client)
 	var clientUser client.ClientUser
-	if err := s.DB.Where("client_id = ?", id).First(&clientUser).Error; err == nil {
+	// err := s.DB.Where("client_id = ?", id).First(&clientUser).Error
+	if err := s.repository.GetFirstWhere(uow, &clientUser,
+		s.repository.Filter("client_id = ?", id),
+	); err == nil {
 		return fmt.Errorf("cannot delete client with ID %d: associated client user exists", id)
 	} else if !gorm.IsRecordNotFoundError(err) {
 		return fmt.Errorf("error checking for dependent client user records: %w", err)
@@ -271,8 +291,10 @@ func (s *BankUserService) DeleteClientByID(id uint) error {
 
 	// get clientID - checking exists or not - before executing delete query at db level, preventing Rollback() - expensive operation)
 	clientEntity := client.Client{}
-	err := s.repository.GetByID(uow, &clientEntity, id)
-	if err != nil {
+	if err := s.repository.GetByID(uow, &clientEntity,
+		s.repository.Filter("id = ?", id),
+		s.repository.Filter("bank_id = ? ", bankId),
+	); err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			return fmt.Errorf("client with ID %d not found or has already been deleted", id)
 		}
@@ -280,7 +302,7 @@ func (s *BankUserService) DeleteClientByID(id uint) error {
 	}
 
 	if err := s.repository.DeleteById(uow, &clientEntity, id); err != nil { ///soft delete
-		return err
+		return fmt.Errorf("failed to delete client with ID %d: %w", id, err)
 	}
 
 	fmt.Println("Delete Client service finished ...")
@@ -288,14 +310,14 @@ func (s *BankUserService) DeleteClientByID(id uint) error {
 	return nil
 }
 
-func (s *BankUserService) VerifyClient(id uint) error {
-	clientEntity, err := s.GetClientByID(id)
+func (s *BankUserService) VerifyClient(id uint, bankId uint) error {
+	clientEntity, err := s.GetClientByID(id, bankId)
 	if err != nil {
 		return fmt.Errorf("client not found: %w", err)
 	}
 	clientEntity.VerificationStatus = "Verified"
 
-	return s.UpdateClientByID(id, *clientEntity)
+	return s.UpdateClientByID(id, bankId, *clientEntity)
 }
 
 // /////////// Document Management Functions  /////// Service //////

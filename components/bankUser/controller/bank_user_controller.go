@@ -110,6 +110,7 @@ func validateClientDTO(dto client.ClientDTO) error {
 // / GET CLIENT BY ID
 func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("GetClientByID called..")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	clientID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
@@ -117,7 +118,8 @@ func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *ht
 		return
 	}
 
-	clientEntity, err := controller.BankUserService.GetClientByID(uint(clientID))
+	// service layer call .. (bankId also added) -- onlyy clients specified BankId are fetched
+	clientEntity, err := controller.BankUserService.GetClientByID(uint(clientID), claims.BankId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, fmt.Sprintf("Client with ID %d not found", clientID), http.StatusNotFound)
@@ -127,12 +129,17 @@ func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Fetch  ClientUser - Username
-	clientUser := controller.BankUserService.GetClientUserByClientID(clientEntity.ID)
+	//// do in this also
+
+	// Fetch ClientUser Username  (validating  ClientUser belongsto specified ClientId and BankId)
+	clientUser, err := controller.BankUserService.GetClientUserByClientID(clientEntity.ID, claims.BankId)
 	var clientUserUsername string
-	if clientUser != nil {
+	if err != nil {
+		fmt.Println("Error fetching client user:", err)
+	} else if clientUser != nil {
 		clientUserUsername = clientUser.Username
 	}
+
 	// response data - not passing all fields in response
 	response := &client.ClientResponseDTO{
 		ID:                 clientEntity.ID,
@@ -168,9 +175,11 @@ func (controller *BankUserController) GetAllClients(w http.ResponseWriter, r *ht
 	for _, clientEntity := range clients {
 
 		// Username - Fetch associated ClientUser Username
-		clientUser := controller.BankUserService.GetClientUserByClientID(clientEntity.ID)
+		clientUser, err := controller.BankUserService.GetClientUserByClientID(clientEntity.ID, claims.BankId)
 		var clientUserUsername string
-		if clientUser != nil {
+		if err != nil {
+			fmt.Println("Error fetching client user:", err)
+		} else if clientUser != nil {
 			clientUserUsername = clientUser.Username
 		}
 
@@ -198,6 +207,8 @@ func (controller *BankUserController) GetAllClients(w http.ResponseWriter, r *ht
 func (controller *BankUserController) UpdateClientByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("UpdateClient controller called ...")
 
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+
 	vars := mux.Vars(r) /// path varibales from req
 	idStr := vars["id"]
 	id, err := strconv.Atoi(idStr) // string to int
@@ -214,13 +225,14 @@ func (controller *BankUserController) UpdateClientByID(w http.ResponseWriter, r 
 		return
 	}
 
+	/// to do claims
 	// Validation
 	if err := validateClientUpdateInput(updatedData); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := controller.BankUserService.UpdateClientByID(clientID, updatedData); err != nil {
+	if err := controller.BankUserService.UpdateClientByID(clientID, claims.BankId, updatedData); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -252,6 +264,7 @@ func validateClientUpdateInput(updatedData client.Client) error {
 // / DELETE CLIENT BY ID
 func (controller *BankUserController) DeleteClientByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("DeleteClient controller called..")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	vars := mux.Vars(r)
 	idStr := vars["id"]
@@ -262,7 +275,7 @@ func (controller *BankUserController) DeleteClientByID(w http.ResponseWriter, r 
 	}
 	clientID := uint(id)
 
-	err = controller.BankUserService.DeleteClientByID(clientID)
+	err = controller.BankUserService.DeleteClientByID(clientID, claims.BankId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, fmt.Sprintf("Client with ID %d not found or has already been deleted", clientID), http.StatusNotFound)
@@ -278,6 +291,9 @@ func (controller *BankUserController) DeleteClientByID(w http.ResponseWriter, r 
 
 // Verify client
 func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Verified client controlle called ...")
+
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
@@ -287,7 +303,7 @@ func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *htt
 	}
 	clientID := uint(id)
 
-	err = controller.BankUserService.VerifyClient(clientID)
+	err = controller.BankUserService.VerifyClient(clientID, claims.BankId)
 	if err != nil {
 		if strings.Contains(err.Error(), "Client not found. Check ClientId") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -307,6 +323,8 @@ func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *htt
 func (controller *BankUserController) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("UPLOAD DOCUMENT Controller called ...")
 
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+
 	var newDocument document.Document
 	if err := json.NewDecoder(r.Body).Decode(&newDocument); err != nil {
 		http.Error(w, "Invalid document data", http.StatusBadRequest)
@@ -320,8 +338,9 @@ func (controller *BankUserController) UploadDocument(w http.ResponseWriter, r *h
 		http.Error(w, "All fields (file_name, file_type, file_url, uploaded_by_user_id, client_id) are required", http.StatusBadRequest)
 		return
 	}
-	// checks that client exists or not
-	if _, err := controller.BankUserService.GetClientByID(newDocument.ClientId); err != nil {
+
+	// checks that client exists or not by ClientId and BankId
+	if _, err := controller.BankUserService.GetClientByID(newDocument.ClientId, claims.BankId); err != nil {
 		http.Error(w, "Client does not exist", http.StatusBadRequest)
 		return
 	}
