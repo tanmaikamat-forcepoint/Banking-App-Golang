@@ -143,21 +143,32 @@ func ValidateAdminPermissionsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		requested_admin_access, ok := mux.Vars(r)["user_id"]
-		if !ok {
-			errorsUtils.SendErrorWithCustomMessage(w, "User_Id not found. Please put User Id in Path", http.StatusUnauthorized)
-			return
-		}
-		requested_admin_access_int, err := strconv.Atoi(requested_admin_access)
-		if err != nil {
-			errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusUnauthorized)
+		if claims.RoleId != 1 {
+			errorsUtils.SendErrorWithCustomMessage(w, "Admin Privileges Denied", http.StatusUnauthorized)
 			return
 		}
 
-		if requested_admin_access_int != int(claims.ClientId) {
-			errorsUtils.SendErrorWithCustomMessage(w, "You are not authorized to access this Bank", http.StatusUnauthorized)
+		if !claims.IsSuperAdmin {
+			errorsUtils.SendErrorWithCustomMessage(w, "Admin Privileges Denied", http.StatusUnauthorized)
 			return
 		}
+
+		// requested_admin_access, ok := mux.Vars(r)["user_id"]
+		// if !ok {
+		// 	errorsUtils.SendErrorWithCustomMessage(w, "User_Id not found. Please put User Id in Path", http.StatusUnauthorized)
+		// 	return
+		// }
+		// requested_admin_access_int, err := strconv.Atoi(requested_admin_access)
+		// if err != nil {
+		// 	errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusUnauthorized)
+		// 	return
+		// }
+
+		// if requested_admin_access_int != int(claims.UserId) {
+		// 	errorsUtils.SendErrorWithCustomMessage(w, "You are not authorized to access this Bank", http.StatusUnauthorized)
+		// 	return
+		// }
+
 		// ctx := context.WithValue(r.Context(), constants.ClaimsAdminKey, admin)
 
 		next.ServeHTTP(w, r)

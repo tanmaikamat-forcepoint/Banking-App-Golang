@@ -2,15 +2,16 @@ package service
 
 import (
 	"bankManagement/models/bank"
+	"bankManagement/models/client"
 	"bankManagement/models/user"
 	"bankManagement/repository"
 	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
+	"strings"
 
 	"fmt"
 
 	"github.com/jinzhu/gorm"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type BankService struct {
@@ -53,17 +54,14 @@ func (s *BankService) CreateBank(bankAndUserEntityDTO bank.BankAndUserDTO) error
 		return err
 	}
 
-	hashedPassword, err := HashPassword(bankAndUserEntityDTO.Password)
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
-	}
+	hashedPassword := encrypt.HashPassword(bankAndUserEntityDTO.Password)
 
 	//Create User for BankUser
 	userEntity := &user.User{
 		Username: bankAndUserEntityDTO.Username,
 		Password: hashedPassword,
-		Name:     bankAndUserEntityDTO.BankName, // Using the BankName as User's Name
-		Email:    bankAndUserEntityDTO.Email,    // Derived email
+		Name:     bankAndUserEntityDTO.BankName, //  BankUSer Name == Name
+		Email:    bankAndUserEntityDTO.Email,    //  BankUserEmail == Email
 		IsActive: true,
 		RoleID:   uint(encrypt.BankUserRoleID),
 	}
@@ -103,12 +101,6 @@ func (s *BankService) ValidateBankDTO(bankDTO bank.BankAndUserDTO) error {
 	return nil
 }
 
-// HASHING PASSWORD
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
 // GET BANK BY ID
 func (s *BankService) GetBankByID(id uint) (*bank.Bank, error) {
 	uow := repository.NewUnitOfWork(s.DB)
@@ -139,22 +131,98 @@ func (s *BankService) GetAllBanks() ([]bank.Bank, error) {
 	return banks, nil
 }
 
-// DELETE BANK
-func (s *BankService) DeleteBank(id uint) error {
+func (s *BankService) DeleteBank(bankID uint) error {
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
-	bankEntity := &bank.Bank{Model: gorm.Model{ID: id}}
-	// Set IsActive to false and delete
-	bankEntity.IsActive = false
-	if err := s.DB.Save(bankEntity).Error; err != nil {
-		return fmt.Errorf("failed to update IsActive: %w", err)
+	// checking if clients exist for this bank
+	var clients []client.Client
+	if err := s.repository.GetAll(uow, &clients, s.repository.Filter("bank_id = ?", bankID)); err != nil {
+		return fmt.Errorf("failed to check associated clients: %w", err)
 	}
-	err := s.repository.DeleteById(uow, bankEntity, id)
-	if err != nil {
-		return err
+	if len(clients) > 0 {
+		return fmt.Errorf("cannot delete bank with ID %d: associated clients exist", bankID)
+	} else {
+		fmt.Println("No associated found.")
+	}
+
+	// Finding and delete associated BankUser (created during Bank Creation)
+	var bankUser bank.BankUser
+	if err := s.repository.GetFirstWhere(uow, &bankUser, "bank_id=?", bankID); err == nil { //Filter("bank_id = ?", bankID)); err == nil {
+		if err := s.repository.DeleteById(uow, &bankUser, bankUser.UserID); err != nil {
+			return fmt.Errorf("failed to delete associated BankUser: %w", err)
+		}
+	} else if !gorm.IsRecordNotFoundError(err) {
+		return fmt.Errorf("error checking for BankUser: %w", err)
+	}
+
+	// Delete the Bank itself
+	bankEntity := bank.Bank{Model: gorm.Model{ID: bankID}}
+	if err := s.repository.DeleteById(uow, &bankEntity, bankID); err != nil {
+		return fmt.Errorf("failed to delete bank with ID %d: %w", bankID, err)
 	}
 
 	uow.Commit()
 	return nil
+}
+
+// // UPDATE BANK (and BankUser - related details also)
+func (s *BankService) UpdateBank(bankID uint, bankDTO bank.BankAndUserDTO) error {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
+
+	// checking if bank to be updated exists by id
+	var existingBank bank.Bank
+	if err := s.repository.GetByID(uow, &existingBank, bankID); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return fmt.Errorf("bank with ID %d not found", bankID)
+		}
+		return err
+	}
+
+	// Validate i/p json data
+	if err := s.ValidateBankDTO(bankDTO); err != nil {
+		return err
+	}
+
+	// Updating fields if BankUser wants that, otherwise I am keeping Old Values
+	if bankDTO.BankName != "" {
+		existingBank.BankName = bankDTO.BankName
+	}
+	if bankDTO.BankAbbreviation != "" {
+		existingBank.BankAbbreviation = bankDTO.BankAbbreviation
+	}
+
+	if err := s.repository.Update(uow, &existingBank); err != nil {
+		return fmt.Errorf("failed to update bank: %w", err)
+	}
+
+	// ----------------  ASSOCIATED bANKUser deletion -----------------
+
+	// // finding and updating associated BankUser
+	/*
+		bankUser := &user.User{}
+		if err := s.repository.GetFirstWhere(uow, bankUser, "bank_id=?", bankID); err != nil {
+			return fmt.Errorf("error retrieving associated BankUser: %w", err)
+		}
+
+		// Update BankUser fields if bank fields have changed
+		if bankDTO.BankName != "" {
+			bankUser.Name = bankDTO.BankName
+		}
+		if bankDTO.BankAbbreviation != "" {
+			bankUser.Email = generateBankUserEmail(bankDTO.BankAbbreviation) // assumes a method to format email based on abbreviation
+		}
+		if err := s.repository.Update(uow, bankUser); err != nil {
+			return fmt.Errorf("failed to update associated BankUser: %w", err)
+		}
+	*/
+	// -----------------------------------------------------------
+
+	uow.Commit()
+	return nil
+}
+
+func generateBankUserEmail(abbreviation string) string {
+	return strings.ToLower(strings.ReplaceAll(abbreviation, " ", "")) + "@gmail.com"
 }

@@ -15,6 +15,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 )
 
 type BankController struct {
@@ -32,11 +33,12 @@ func NewBankController(UserServcice *service.BankService, log log.WebLogger) *Ba
 func (controller *BankController) RegisterRoutes(router *mux.Router) {
 	bankRouter := router.PathPrefix("/banks").Subrouter()
 	bankRouter.Use(auth.AuthenticationMiddleware, auth.ValidateAdminPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
-	// bankRouter.Use(middleware.ValidateAdminPermissionsMiddleware) // SuperAdmin middleware
+	// bankRouter.Use(middleware.ValidateAdminPermissionsMiddleware)                         // SuperAdmin middleware
 	bankRouter.HandleFunc("/", controller.CreateBank).Methods("POST")
 	bankRouter.HandleFunc("/", controller.GetAllBanks).Methods("GET")
 	bankRouter.HandleFunc("/{id}", controller.GetBankByID).Methods("GET")
 	bankRouter.HandleFunc("/{id}", controller.DeleteBank).Methods("DELETE")
+	bankRouter.HandleFunc("/{id}", controller.UpdateBank).Methods("PUT")
 
 	// POST - /api/v1/bankManagement/banks
 }
@@ -143,18 +145,51 @@ func (controller *BankController) GetAllBanks(w http.ResponseWriter, r *http.Req
 
 // DELETE
 func (controller *BankController) DeleteBank(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("DeleteBank controller called...")
 
-	idStr := mux.Vars(r)["id"]
-	id, err := strconv.Atoi(idStr)
+	bankIDStr := mux.Vars(r)["id"]
+	bankID, err := strconv.Atoi(bankIDStr)
 	if err != nil {
 		http.Error(w, "Invalid bank ID", http.StatusBadRequest)
 		return
 	}
 
-	if err := controller.BankService.DeleteBank(uint(id)); err != nil {
+	if err := controller.BankService.DeleteBank(uint(bankID)); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+	w.Write([]byte(fmt.Sprintf("Bank and associated BankUser with ID %d successfully deleted", bankID)))
+
+}
+
+// // UPDATE BANK
+func (controller *BankController) UpdateBank(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("UpdateBank called")
+
+	//bank ID-- URL
+	bankIDStr := mux.Vars(r)["id"]
+	bankID, err := strconv.Atoi(bankIDStr)
+	if err != nil {
+		http.Error(w, "Invalid bank ID", http.StatusBadRequest)
+		return
+	}
+	// JSON decoder -  updated data
+	var bankDTO bank.BankAndUserDTO
+	if err := json.NewDecoder(r.Body).Decode(&bankDTO); err != nil {
+		http.Error(w, "Invalid input format", http.StatusBadRequest)
+		return
+	}
+	// service call -- update(Bank & BankUser)
+	if err := controller.BankService.UpdateBank(uint(bankID), bankDTO); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			http.Error(w, fmt.Sprintf("Bank with ID %d not found", bankID), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("Bank with ID %d and associated BankUser updated successfully", bankID)))
 }

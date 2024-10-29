@@ -3,6 +3,7 @@ package service
 import (
 	"bankManagement/models/user"
 	"bankManagement/repository"
+	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
 	"fmt"
 
@@ -49,7 +50,7 @@ func (s *UserService) CreateSuperAdmin(username, password string, name, email st
 	// Create SuperAdmin user
 	superAdmin := &user.User{
 		Username: username,
-		Password: password,
+		Password: encrypt.HashPassword(password),
 		Name:     name,
 		Email:    email,
 		IsActive: true,
