@@ -4,3 +4,6 @@
 -- INSERT INTO client_users(client_id,user_id) VALUES(2,10)
 -- UPDATE clients SET balance = 100000 WHERE id =1;
 -- DELETE From roles WHERE roles.id >3
+
+DROP TABLE payments;
+DROP TABLE payment_requests;
