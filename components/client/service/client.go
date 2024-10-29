@@ -3,6 +3,7 @@ package service
 import (
 	"bankManagement/models/client"
 	"bankManagement/models/employee"
+	"bankManagement/models/reports"
 	"bankManagement/models/salaryDisbursement"
 	"bankManagement/models/transaction"
 	"bankManagement/repository"
@@ -222,6 +223,64 @@ func (service *ClientService) DisburseSalaryAllEmployees(clientId uint, approved
 		}
 
 	}
+
+	uow.Commit()
+	return nil
+}
+
+func (service *ClientService) GetSalaryReport(clientId uint, report *reports.SalaryReport) error {
+	uow := repository.NewUnitOfWork(service.DB)
+	defer uow.RollBack()
+	var allEmployees []employee.Employee
+	employeeCount := 0
+	err := service.repository.GetAll(uow, &allEmployees,
+		service.repository.Filter("client_id=?", clientId),
+		service.repository.Count(100000, 0, &employeeCount),
+	)
+	if err != nil {
+		return err
+	}
+
+	tempClient := &client.Client{}
+	err = service.repository.GetByID(uow, tempClient, clientId)
+	if err != nil {
+		return err
+	}
+	var amountToBeDisbursed float64 = 0
+	for _, emp := range allEmployees {
+		amountToBeDisbursed += emp.SalaryAmount
+	}
+
+	SalaryReport := &reports.SalaryReport{
+		ExpectedMonthlySalaryDisbursal: 0,
+		TotalSalaryDisbursed:           0,
+		AverageSalary:                  0,
+		TotalEmployees:                 employeeCount,
+	}
+	// var disbursal struct {
+	// 	sum float64
+	// }
+	// err = service.repository.Raw(uow, &disbursal, "Select SUM(salary_amount) as sum From employees where client_id=? ;", clientId)
+	// if err != nil {
+	// 	return err
+	// }
+	// SalaryReport.ExpectedMonthlySalaryDisbursal = disbursal.sum
+	// SalaryReport.AverageSalary = SalaryReport.ExpectedMonthlySalaryDisbursal / float64(SalaryReport.TotalEmployees)
+	var empDisbursement []reports.EmployeePaymentDTO
+	for _, emp := range allEmployees {
+		empDisbursement = append(empDisbursement, reports.EmployeePaymentDTO{
+			EmpId:           emp.ID,
+			SalaryDisbursed: emp.TotalSalaryReceived,
+			MonthlySalary:   emp.SalaryAmount,
+		})
+		SalaryReport.TotalSalaryDisbursed += emp.TotalSalaryReceived
+		SalaryReport.ExpectedMonthlySalaryDisbursal += emp.SalaryAmount
+	}
+	if len(allEmployees) > 0 {
+		SalaryReport.AverageSalary = SalaryReport.ExpectedMonthlySalaryDisbursal / float64(SalaryReport.TotalEmployees)
+	}
+	SalaryReport.EmployeeDisbursementData = empDisbursement
+	*report = *SalaryReport
 
 	uow.Commit()
 	return nil
