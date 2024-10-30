@@ -27,6 +27,7 @@ type Claims struct {
 func HashPassword(password string) string {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
+		fmt.Println("failed to hash password")
 		panic(err)
 	}
 	return string(hash)

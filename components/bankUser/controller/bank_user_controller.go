@@ -3,7 +3,6 @@ package controller
 import (
 	"bankManagement/components/bankUser/service"
 	"bankManagement/constants"
-	"bankManagement/middleware"
 	"bankManagement/middlewares/auth"
 	"bankManagement/models/client"
 	"bankManagement/models/document"
@@ -13,7 +12,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -34,7 +36,7 @@ func NewBankUserController(bankUserService *service.BankUserService, log log.Web
 }
 
 func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
-	clientRouter := router.PathPrefix("/banks/{bank_id}/client").Subrouter()
+	clientRouter := router.PathPrefix("/bank/{bank_id}/client").Subrouter()
 	clientRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
 	clientRouter.HandleFunc("/", controller.CreateClient).Methods("POST")
 	clientRouter.HandleFunc("/{id}", controller.GetClientByID).Methods("GET")
@@ -42,20 +44,21 @@ func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
 	clientRouter.HandleFunc("/{id}", controller.UpdateClientByID).Methods("PUT")
 	clientRouter.HandleFunc("/{id}", controller.DeleteClientByID).Methods("DELETE")
 
-	docRouter := router.PathPrefix("/banks").Subrouter()
-	docRouter.Use(middleware.ValidateBankUserPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only UPLOAD DOCUMENTS)
-	docRouter.HandleFunc("/documents", controller.UploadDocument).Methods("POST")
-	docRouter.HandleFunc("/{bankId}/documents/{documentId}", controller.GetDocumentByID).Methods("GET")
-	docRouter.HandleFunc("/{bankId}/documents", controller.GetAllDocuments).Methods("GET")
-	docRouter.HandleFunc("/documents/{documentId}", controller.DeleteDocumentByDocumentID).Methods("DELETE")
+	docRouter := router.PathPrefix("/bank/{bank_id}/document").Subrouter()
+	docRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only UPLOAD DOCUMENTS)
+	docRouter.HandleFunc("/", controller.uploadDocumentHandler).Methods(http.MethodPost)
+	docRouter.HandleFunc("/{id}", controller.GetDocumentByID).Methods("GET")
+	docRouter.HandleFunc("/", controller.GetAllDocuments).Methods("GET")
+
 
 	paymentRouter := router.PathPrefix("/banks/{bank_id}/payment_requests").Subrouter()
 	paymentRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware)
 	paymentRouter.HandleFunc("/{payment_request_id}/approve", controller.ApprovePaymentRequest).Methods(http.MethodPost)
 	paymentRouter.HandleFunc("/{payment_request_id}/reject", controller.RejectPaymentRequest).Methods(http.MethodPost)
+
 	paymentRouter.HandleFunc("/{id}", controller.GetPaymentRequest).Methods(http.MethodGet)
 
-	transactionRouter := router.PathPrefix("/transactions").Subrouter()
+	transactionRouter := router.PathPrefix("/transaction").Subrouter()
 	transactionRouter.HandleFunc("/{client_id}/report", controller.GenerateTransactionReport).Methods(http.MethodGet)
 
 }
@@ -112,6 +115,7 @@ func validateClientDTO(dto client.ClientDTO) error {
 // / GET CLIENT BY ID
 func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("GetClientByID called..")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	clientID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
@@ -119,7 +123,8 @@ func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *ht
 		return
 	}
 
-	clientEntity, err := controller.BankUserService.GetClientByID(uint(clientID))
+	// service layer call .. (bankId also added) -- onlyy clients specified BankId are fetched
+	clientEntity, err := controller.BankUserService.GetClientByID(uint(clientID), claims.BankId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, fmt.Sprintf("Client with ID %d not found", clientID), http.StatusNotFound)
@@ -129,12 +134,17 @@ func (controller *BankUserController) GetClientByID(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Fetch  ClientUser - Username
-	clientUser := controller.BankUserService.GetClientUserByClientID(clientEntity.ID)
+	//// do in this also
+
+	// Fetch ClientUser Username  (validating  ClientUser belongsto specified ClientId and BankId)
+	clientUser, err := controller.BankUserService.GetClientUserByClientID(clientEntity.ID, claims.BankId)
 	var clientUserUsername string
-	if clientUser != nil {
+	if err != nil {
+		fmt.Println("Error fetching client user:", err)
+	} else if clientUser != nil {
 		clientUserUsername = clientUser.Username
 	}
+
 	// response data - not passing all fields in response
 	response := &client.ClientResponseDTO{
 		ID:                 clientEntity.ID,
@@ -170,9 +180,11 @@ func (controller *BankUserController) GetAllClients(w http.ResponseWriter, r *ht
 	for _, clientEntity := range clients {
 
 		// Username - Fetch associated ClientUser Username
-		clientUser := controller.BankUserService.GetClientUserByClientID(clientEntity.ID)
+		clientUser, err := controller.BankUserService.GetClientUserByClientID(clientEntity.ID, claims.BankId)
 		var clientUserUsername string
-		if clientUser != nil {
+		if err != nil {
+			fmt.Println("Error fetching client user:", err)
+		} else if clientUser != nil {
 			clientUserUsername = clientUser.Username
 		}
 
@@ -196,9 +208,11 @@ func (controller *BankUserController) GetAllClients(w http.ResponseWriter, r *ht
 
 }
 
-// ///// UPDATE CLIENT
+// UPDATE CLIENT ()
 func (controller *BankUserController) UpdateClientByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("UpdateClient controller called ...")
+
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	vars := mux.Vars(r) /// path varibales from req
 	idStr := vars["id"]
@@ -222,7 +236,7 @@ func (controller *BankUserController) UpdateClientByID(w http.ResponseWriter, r 
 		return
 	}
 
-	if err := controller.BankUserService.UpdateClientByID(clientID, updatedData); err != nil {
+	if err := controller.BankUserService.UpdateClientByID(clientID, claims.BankId, updatedData); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -232,6 +246,7 @@ func (controller *BankUserController) UpdateClientByID(w http.ResponseWriter, r 
 }
 
 func validateClientUpdateInput(updatedData client.Client) error {
+	// check if ClientName, ClientEmai - > not same as some Client. Update BAnkID check
 	allowedStatuses := map[string]bool{
 		"Pending":  true,
 		"Verified": true,
@@ -252,8 +267,10 @@ func validateClientUpdateInput(updatedData client.Client) error {
 }
 
 // / DELETE CLIENT BY ID
+
 func (controller *BankUserController) DeleteClientByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("DeleteClient controller called..")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	vars := mux.Vars(r)
 	idStr := vars["id"]
@@ -264,7 +281,7 @@ func (controller *BankUserController) DeleteClientByID(w http.ResponseWriter, r 
 	}
 	clientID := uint(id)
 
-	err = controller.BankUserService.DeleteClientByID(clientID)
+	err = controller.BankUserService.DeleteClientByID(clientID, claims.BankId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, fmt.Sprintf("Client with ID %d not found or has already been deleted", clientID), http.StatusNotFound)
@@ -280,6 +297,9 @@ func (controller *BankUserController) DeleteClientByID(w http.ResponseWriter, r 
 
 // Verify client
 func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Verified client controlle called ...")
+
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
@@ -289,7 +309,7 @@ func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *htt
 	}
 	clientID := uint(id)
 
-	err = controller.BankUserService.VerifyClient(clientID)
+	err = controller.BankUserService.VerifyClient(clientID, claims.BankId)
 	if err != nil {
 		if strings.Contains(err.Error(), "Client not found. Check ClientId") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -303,95 +323,7 @@ func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *htt
 	w.Write([]byte("Client verification status updated successfully"))
 }
 
-// /////////// Document Management Functions  /////// Controller //////
-
-// UPLOAD DOCUMENT
-func (controller *BankUserController) UploadDocument(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("UPLOAD DOCUMENT Controller called ...")
-
-	var newDocument document.Document
-	if err := json.NewDecoder(r.Body).Decode(&newDocument); err != nil {
-		http.Error(w, "Invalid document data", http.StatusBadRequest)
-		return
-	}
-
-	fmt.Printf("file_name: %s\nfile_type: %s\nfile_url: %s\nuploaded_by_user_id: %d\nclient_id: %d\n",
-		newDocument.FileName, newDocument.FileType, newDocument.FileURL, newDocument.UploadedByUserId, newDocument.ClientId)
-
-	if newDocument.FileName == "" || newDocument.FileType == "" || newDocument.FileURL == "" || newDocument.UploadedByUserId == 0 || newDocument.ClientId == 0 {
-		http.Error(w, "All fields (file_name, file_type, file_url, uploaded_by_user_id, client_id) are required", http.StatusBadRequest)
-		return
-	}
-	// checks that client exists or not
-	if _, err := controller.BankUserService.GetClientByID(newDocument.ClientId); err != nil {
-		http.Error(w, "Client does not exist", http.StatusBadRequest)
-		return
-	}
-	// service Call
-	if err := controller.BankUserService.UploadDocument(newDocument); err != nil {
-		http.Error(w, "Error uploading document: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Println("Document Uploaded Controller Finished...")
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("Document uploaded successfully"))
-}
-
-// GET DOCUEMNT BY DOCUMENTID
-func (controller *BankUserController) GetDocumentByID(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	bankID, _ := strconv.Atoi(vars["bankId"])
-	docID, _ := strconv.Atoi(vars["documentId"])
-
-	doc, err := controller.BankUserService.GetDocumentByID(uint(bankID), uint(docID))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(doc)
-}
-
-// / GET ALL DOCUMENTS
-func (controller *BankUserController) GetAllDocuments(w http.ResponseWriter, r *http.Request) {
-
-	bankIDStr := mux.Vars(r)["bankId"]
-	clientIDStr := r.URL.Query().Get("clientId") //// bankID and clientID from query parameters
-
-	bankID, _ := strconv.Atoi(bankIDStr)
-	clientID, _ := strconv.Atoi(clientIDStr)
-
-	docs, err := controller.BankUserService.GetAllDocuments(uint(bankID), uint(clientID))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(docs)
-}
-
-// DELETE DOCUEMNT
-func (controller *BankUserController) DeleteDocumentByDocumentID(w http.ResponseWriter, r *http.Request) {
-	bankIDStr := mux.Vars(r)["bankId"]
-	clientIDStr := r.URL.Query().Get("clientId")
-	documentIDStr := mux.Vars(r)["documentId"]
-
-	bankID, _ := strconv.Atoi(bankIDStr)
-	clientID, _ := strconv.Atoi(clientIDStr)
-	documentID, _ := strconv.Atoi(documentIDStr)
-
-	err := controller.BankUserService.DeleteDocumentByDocumentID(uint(bankID), uint(clientID), uint(documentID))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
+//-------------------------------------------------------------------------------------------------------
 /////////////  Payment Approval Functions  //////// Controller /////
 
 // Approve Payment Request
@@ -460,4 +392,107 @@ func (controller *BankUserController) GenerateTransactionReport(w http.ResponseW
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(transactions)
+}
+
+// -------------------------------------------------------------------------------------------------------
+const DocumentUploadDir = `C:\Users\sushant.chauhan\Desktop\Banking-App-Golang\document`
+
+// var db *gorm.DB // Global database connection
+
+func (controller *BankUserController) uploadDocumentHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bankId, err := strconv.Atoi(vars["bank_id"])
+	if err != nil {
+		http.Error(w, "Invalid bank ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "Parsing form error", http.StatusInternalServerError)
+		return
+	}
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving the file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	fileName := handler.Filename
+	fileType := handler.Header.Get("Content-Type")
+	filePath := filepath.Join(DocumentUploadDir, fileName)
+
+	dst, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Unable to save the file", http.StatusInternalServerError)
+		return
+	}
+
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		return
+	}
+	uploadedByUserIdStr := r.FormValue("uploaded_by_user_id")
+	clientIdStr := r.FormValue("client_id")
+	uploadedByUserId, _ := strconv.Atoi(uploadedByUserIdStr)
+	clientId, _ := strconv.Atoi(clientIdStr)
+
+	document1 := document.Document{
+		FileName:         fileName,
+		FileType:         fileType,
+		FileURL:          filePath,
+		UploadedByUserId: uint(uploadedByUserId),
+		ClientId:         uint(clientId),
+		BankId:           uint(bankId),
+	}
+
+	fmt.Println("fileName, filePath, fileType ================ >>>>>>>>>> ", fileName, filePath, fileType)
+
+	if result := controller.BankUserService.DB.Create(&document1); result.Error != nil {
+		http.Error(w, "Error saving document metadata", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println(w, "File uploaded and saved successfully")
+}
+
+// get all documents for a bank
+func (controller *BankUserController) GetAllDocuments(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("GetAllDocuments called")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+	bankID := claims.BankId // Assuming BankId is extracted from JWT claims
+
+	documents, err := controller.BankUserService.GetAllDocuments(bankID)
+	if err != nil {
+		http.Error(w, "Failed to fetch documents: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(documents)
+}
+
+func (controller *BankUserController) GetDocumentByID(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("GetDocumentByID called")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+	bankID := claims.BankId // Assuming BankId is extracted from JWT claims
+
+	docIDStr := mux.Vars(r)["id"]
+	docID, err := strconv.Atoi(docIDStr)
+	if err != nil {
+		http.Error(w, "Invalid document ID format", http.StatusBadRequest)
+		return
+	}
+
+	document, err := controller.BankUserService.GetDocumentByID(uint(docID), bankID)
+	if err != nil {
+		http.Error(w, "Failed to fetch document: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(document)
 }

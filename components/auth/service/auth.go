@@ -96,7 +96,7 @@ func (service *AuthService) CreateNewAdmin(admin *user.User) error {
 		Email:    admin.Email,
 		IsActive: true,
 		RoleID:   uint(encrypt.AdminUserRoleID),
-	}
+	}	
 	err := service.repository.Add(uow, &tempUser)
 	if err != nil {
 		service.log.Error(err)

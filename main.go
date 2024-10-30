@@ -26,16 +26,16 @@ func main() {
 		db.Close()
 		log.Error("Database Closed")
 	}()
-	seeder.SeedRoles(db)
+
 	wg := NewWaitGroup()
 	repo := NewRepository()
 	appObj := app.NewApp(name, db, log, wg, repo)
 	appObj.Init()
 	modules.RegisterTableMigrations(appObj)
 	modules.RegisterAllModules(appObj)
+	seeder.SeedRoles(db)
 	// email.GetSMTPService().SendEmail("Temp Email", "This is temp Email", "crazinessspeaks@gmail.com")
-
-	modules.SeedData(appObj)
+	// modules.SeedData(appObj)
 	appObj.StartServer()
 
 }
