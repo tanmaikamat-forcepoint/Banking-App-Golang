@@ -117,6 +117,7 @@ func (srv *PaymentService) CreatePaymentRequest(clientId uint, createdByUserId u
 
 	tempPaymentRequest := payments.PaymentRequest{
 		PaymentAmount:  paymentRequest.PaymentAmount,
+		Resolved:       false,
 		SenderClientID: clientId,
 	}
 	tempSender := client.Client{}

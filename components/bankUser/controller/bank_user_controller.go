@@ -7,6 +7,7 @@ import (
 	"bankManagement/models/client"
 	"bankManagement/models/document"
 	"bankManagement/utils/encrypt"
+	errorsUtils "bankManagement/utils/errors"
 	"bankManagement/utils/log"
 	"encoding/json"
 	"errors"
@@ -49,9 +50,12 @@ func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
 	docRouter.HandleFunc("/{id}", controller.GetDocumentByID).Methods("GET")
 	docRouter.HandleFunc("/", controller.GetAllDocuments).Methods("GET")
 
-	paymentRouter := router.PathPrefix("/payment").Subrouter()
-	paymentRouter.HandleFunc("/{id}/approve", controller.ApprovePaymentRequest).Methods(http.MethodPost)
-	paymentRouter.HandleFunc("/{id}/reject", controller.RejectPaymentRequest).Methods(http.MethodPost)
+
+	paymentRouter := router.PathPrefix("/banks/{bank_id}/payment_requests").Subrouter()
+	paymentRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware)
+	paymentRouter.HandleFunc("/{payment_request_id}/approve", controller.ApprovePaymentRequest).Methods(http.MethodPost)
+	paymentRouter.HandleFunc("/{payment_request_id}/reject", controller.RejectPaymentRequest).Methods(http.MethodPost)
+
 	paymentRouter.HandleFunc("/{id}", controller.GetPaymentRequest).Methods(http.MethodGet)
 
 	transactionRouter := router.PathPrefix("/transaction").Subrouter()
@@ -324,14 +328,15 @@ func (controller *BankUserController) VerifyClient(w http.ResponseWriter, r *htt
 
 // Approve Payment Request
 func (controller *BankUserController) ApprovePaymentRequest(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
+	idStr := mux.Vars(r)["payment_request_id"]
 	id, err := strconv.Atoi(idStr)
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 	if err != nil {
 		http.Error(w, "Invalid payment request ID", http.StatusBadRequest)
 		return
 	}
-	if err := controller.BankUserService.ApprovePaymentRequest(uint(id)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := controller.BankUserService.ApprovePaymentRequest(uint(id), claims.UserId); err != nil {
+		errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -339,7 +344,7 @@ func (controller *BankUserController) ApprovePaymentRequest(w http.ResponseWrite
 }
 
 func (controller *BankUserController) RejectPaymentRequest(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
+	idStr := mux.Vars(r)["payment_request_id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid payment request ID", http.StatusBadRequest)
