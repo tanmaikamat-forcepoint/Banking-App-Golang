@@ -8,6 +8,7 @@ import (
 	"bankManagement/models/transaction"
 	"bankManagement/models/user"
 	"bankManagement/repository"
+	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
 	"errors"
 	"fmt"
@@ -63,10 +64,7 @@ func (s *BankUserService) CreateClient(clientDTO client.ClientDTO) error {
 		return fmt.Errorf("CLIENT_USER role not found: %w", err)
 	}
 
-	hashedPassword, err := HashPassword(clientDTO.Password)
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
-	}
+	hashedPassword := encrypt.HashPassword(clientDTO.Password)
 
 	clientUser := &user.User{
 		Username: clientDTO.Username,
@@ -138,14 +136,16 @@ func (s *BankUserService) ValidateBankID(bankID uint) error {
 }
 
 // GET CLIENT BY ID
-func (s *BankUserService) GetClientByID(id uint) (*client.Client, error) {
+func (s *BankUserService) GetClientByID(id uint, bankId uint) (*client.Client, error) {
 	fmt.Println("Getting ClientID in Service...")
 
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
 	clientEntity := client.Client{}
-	err := s.repository.GetByID(uow, &clientEntity, id)
+
+	err := s.repository.GetByID(uow, &clientEntity, s.repository.Filter("id = ?", id)) // s.repository.Filter("bank_id = ?", bankId),
+
 	if err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			// Custom err msg
@@ -180,31 +180,47 @@ func (s *BankUserService) GetAllClients(bankId uint) ([]client.Client, error) {
 	return clients, nil
 }
 
-// get ClientUser by clientID
-func (s *BankUserService) GetClientUserByClientID(clientID uint) *user.User {
+// get ClientUser by clientID & and BankID
+func (s *BankUserService) GetClientUserByClientID(clientID uint, bankID uint) (*user.User, error) {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
 
 	var clientUser client.ClientUser
-	err := s.DB.Where("client_id = ?", clientID).First(&clientUser).Error
-	if err != nil {
-		return nil
+	// err := s.DB.Where("client_id = ?", clientID).First(&clientUser).Error
+	if err := s.repository.GetFirstWhere(
+		uow,
+		&clientUser,
+		s.repository.Filter("client_id=? AND bank_id=?", clientID, bankID),
+	); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, fmt.Errorf("no client user found for client ID %d and bank ID %d", clientID, bankID)
+		}
+		return nil, err
 	}
 
 	var userEntity user.User
-	s.DB.Where("id = ?", clientUser.UserID).First(&userEntity)
-	return &userEntity
+	if err := s.repository.GetFirstWhere(uow, &userEntity, s.repository.Filter("id=?", clientUser.UserID)); err != nil {
+		return nil, fmt.Errorf("user associated with client ID %d not found", clientID)
+	}
+
+	uow.Commit()
+	return &userEntity, nil
 }
 
 // / UPDATE CLIENT
-func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) error {
+func (s *BankUserService) UpdateClientByID(id uint, bankId uint, updatedData client.Client) error {
 	fmt.Println("UpdateClient service called ...")
 
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
-	// check if it exists & fetch it
+	// Check if it exists & fetch it
 	var existingClient client.Client
-	if err := s.repository.GetByID(uow, &existingClient, id); err != nil {
-		return errors.New("client not found")
+	if err := s.repository.GetFirstWhere(uow, &existingClient, "id = ? AND bank_id = ?", id, bankId); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return fmt.Errorf("client with ID %d not found or does not belong to the specified bank", id)
+		}
+		return err
 	}
 
 	// Updating fileds if BankUser wants that, otherwise i am keeping Old Values
@@ -214,12 +230,7 @@ func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) e
 	if updatedData.ClientEmail != "" {
 		existingClient.ClientEmail = updatedData.ClientEmail
 	}
-
-	// during update also bal > 1K
-	if updatedData.Balance > 0 {
-		if updatedData.Balance < 1000 {
-			return errors.New("balance must be at least 1000")
-		}
+	if updatedData.Balance > 0 { // balance cannot be negative, will not update
 		existingClient.Balance = updatedData.Balance
 	}
 
@@ -255,32 +266,36 @@ func (s *BankUserService) UpdateClientByID(id uint, updatedData client.Client) e
 }
 
 // // DELETE CLIENT
-func (s *BankUserService) DeleteClientByID(id uint) error {
+func (s *BankUserService) DeleteClientByID(id uint, bankId uint) error {
 	fmt.Println("Deelte Client service called ...")
 
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
 
+	// Fetch the client to check if it belongs to the correct bank
+	var tmpclient client.Client
+	if err := s.repository.GetByID(uow, &tmpclient, id); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return fmt.Errorf("client with ID %d not found or has already been deleted", id)
+		}
+		return err
+	}
+
+	// Validate bank ID
+	if tmpclient.BankID != bankId {
+		return fmt.Errorf("client with ID %d does not belong to bank with ID %d", id, bankId)
+	}
+
 	// Check for dependent ClientUser records
 	var clientUser client.ClientUser
-	if err := s.DB.Where("client_id = ?", id).First(&clientUser).Error; err == nil {
+	if err := s.repository.GetFirstWhere(uow, &clientUser, "client_id = ?", id); err == nil {
 		return fmt.Errorf("cannot delete client with ID %d: associated client user exists", id)
 	} else if !gorm.IsRecordNotFoundError(err) {
 		return fmt.Errorf("error checking for dependent client user records: %w", err)
 	}
 
-	// get clientID - checking exists or not - before executing delete query at db level, preventing Rollback() - expensive operation)
-	clientEntity := client.Client{}
-	err := s.repository.GetByID(uow, &clientEntity, id)
-	if err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			return fmt.Errorf("client with ID %d not found or has already been deleted", id)
-		}
-		return err //other error
-	}
-
-	if err := s.repository.DeleteById(uow, &clientEntity, id); err != nil { ///soft delete
-		return err
+	if err := s.repository.DeleteById(uow, &tmpclient, id); err != nil {
+		return fmt.Errorf("failed to delete client with ID %d: %w", id, err)
 	}
 
 	fmt.Println("Delete Client service finished ...")
@@ -288,174 +303,17 @@ func (s *BankUserService) DeleteClientByID(id uint) error {
 	return nil
 }
 
-func (s *BankUserService) VerifyClient(id uint) error {
-	clientEntity, err := s.GetClientByID(id)
+func (s *BankUserService) VerifyClient(id uint, bankId uint) error {
+	clientEntity, err := s.GetClientByID(id, bankId)
 	if err != nil {
 		return fmt.Errorf("client not found: %w", err)
 	}
 	clientEntity.VerificationStatus = "Verified"
 
-	return s.UpdateClientByID(id, *clientEntity)
+	return s.UpdateClientByID(id, bankId, *clientEntity)
 }
 
-// /////////// Document Management Functions  /////// Service //////
-// CREATE DOCUMENT
-func (s *BankUserService) UploadDocument(newDoc document.Document) error {
-	fmt.Println("UPLOAD DOCUMENT Service called ...")
-
-	uow := repository.NewUnitOfWork(s.DB)
-	defer uow.RollBack()
-
-	// Check if ClientID and UploadedByUserID are associated in ClientUser table
-	if err := s.ValidateClientUserRelation(newDoc.ClientId, newDoc.UploadedByUserId); err != nil {
-		return fmt.Errorf("the user ID %d does not belong to client ID %d", newDoc.UploadedByUserId, newDoc.ClientId)
-	}
-
-	// Create a new document record
-	newDocument := &document.Document{
-		FileName:         newDoc.FileName,
-		FileType:         newDoc.FileType,
-		FileURL:          newDoc.FileURL,
-		UploadedByUserId: newDoc.UploadedByUserId,
-		ClientId:         newDoc.ClientId,
-	}
-
-	// Add the document to the repository and check for errors
-	if err := s.repository.Add(uow, newDocument); err != nil {
-		return fmt.Errorf("failed to add document: %w", err)
-	}
-
-	fmt.Println("UPLOAD DOCUMENT Service Finished ...")
-	uow.Commit()
-	return nil
-}
-
-// Checks if the UserID belongs to the specified ClientID (Client & ClientUser validation check)
-func (s *BankUserService) ValidateClientUserRelation(clientID, userID uint) error {
-	var clientUserRelation client.ClientUser
-	if err := s.DB.Where("client_id = ? AND user_id = ?", clientID, userID).First(&clientUserRelation).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			return errors.New("the provided user ID does not belong to the specified client")
-		}
-		return err
-	}
-	return nil
-}
-
-// READ DOCUMENT
-func (s *BankUserService) GetDocumentByID(id uint, bankUserID uint) (*document.Document, error) {
-	uow := repository.NewUnitOfWork(s.DB)
-	defer uow.RollBack()
-
-	var documentEntity document.Document
-
-	// get document by ID
-	if err := s.repository.GetByID(uow, &documentEntity, id); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("document with ID %d not found", id)
-		}
-		return nil, err
-	}
-
-	// Check if the document ClientID is associated with the BankUser’s BankID
-	clientID := documentEntity.ClientId
-	if err := s.ValidateBankUserAssociation(bankUserID, clientID); err != nil {
-		return nil, fmt.Errorf("the bank user with ID %d is not authorized to access document for client ID %d", bankUserID, clientID)
-	}
-
-	uow.Commit()
-	return &documentEntity, nil
-}
-
-// Validation -- ensure BankUser and Client association
-func (s *BankUserService) ValidateBankUserAssociation(bankUserID, clientID uint) error {
-	var bankUserAssociation bank.BankUser
-	if err := s.DB.Where("user_id = ? AND client_id = ?", bankUserID, clientID).First(&bankUserAssociation).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			return errors.New("the bank user is not authorized to access this client’s document")
-		}
-		return err
-	}
-	return nil
-}
-
-// / GET ALL DOCUMENTS BY BANK ID
-func (s *BankUserService) GetAllDocuments(bankUserID uint, bankID uint) ([]document.Document, error) {
-	uow := repository.NewUnitOfWork(s.DB)
-	defer uow.RollBack()
-
-	// Validate
-	if err := s.ValidateBankUserAccess(bankUserID, bankID); err != nil {
-		return nil, fmt.Errorf("bank user with ID %d is not authorized to access documents for bank ID %d", bankUserID, bankID)
-	}
-
-	// get all documents of clients - for specified bank
-	var documents []document.Document
-	err := s.DB.Joins("JOIN clients ON clients.id = documents.client_id").
-		Where("clients.bank_id = ?", bankID).
-		Find(&documents).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve documents for bank ID %d: %w", bankID, err)
-	}
-
-	uow.Commit()
-	return documents, nil
-}
-
-// Validate --  BankUser is authized to access BankID (bank's docs)
-func (s *BankUserService) ValidateBankUserAccess(bankUserID, bankID uint) error {
-	var bankUser bank.BankUser
-	if err := s.DB.Where("user_id = ? AND bank_id = ?", bankUserID, bankID).First(&bankUser).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			return errors.New("the bank user is not authorized to access documents for this bank")
-		}
-		return err
-	}
-	return nil
-}
-
-// DELETE DOCUMENT BY DOCUMENT ID WITH VALIDATION
-func (s *BankUserService) DeleteDocumentByDocumentID(documentID, bankUserID, bankID uint) error {
-	uow := repository.NewUnitOfWork(s.DB)
-	defer uow.RollBack()
-
-	var documentEntity document.Document
-	if err := s.repository.GetByID(uow, &documentEntity, documentID); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("document with ID %d not found", documentID)
-		}
-		return err
-	}
-
-	// Validate BankUser
-	if err := s.ValidateBankUserAccessForDocument(bankUserID, bankID, documentEntity.ClientId); err != nil {
-		return err
-	}
-
-	if err := s.repository.DeleteById(uow, &documentEntity, documentID); err != nil {
-		return fmt.Errorf("failed to delete document with ID %d: %w", documentID, err)
-	}
-
-	uow.Commit()
-	return nil
-}
-
-// VALIDATION TO CHECK BANKUSER ACCESS FOR DOCUMENT DELETION [checks bankID matches client’s bank]
-func (s *BankUserService) ValidateBankUserAccessForDocument(bankUserID, bankID, clientID uint) error {
-
-	var client client.Client
-	if err := s.DB.Where("id = ? AND bank_id = ?", clientID, bankID).First(&client).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			return errors.New("client does not belong to the specified bank")
-		}
-		return err
-	}
-
-	if err := s.ValidateBankUserAccess(bankUserID, bankID); err != nil {
-		return errors.New("bank user is not authorized to delete documents for this client")
-	}
-	return nil
-}
+//--------------------------------------------------------------------------------------------------------------------------
 
 /////////////  Payment Approval Functions  //////////// Service /////
 
@@ -619,4 +477,54 @@ func (s *BankUserService) GenerateTransactionReport(clientID uint) ([]transactio
 
 	uow.Commit()
 	return transactions, nil
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+// upload document
+func (s *BankUserService) SaveDocumentData(doc document.Document) error {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
+
+	if doc.FileName == "" || doc.FileType == "" || doc.FileURL == "" {
+		return errors.New("document must include a file name, file type, and file URL")
+	}
+
+	if err := s.repository.Add(uow, &doc); err != nil {
+		return fmt.Errorf("failed to add document: %w", err)
+	}
+
+	uow.Commit()
+	return nil
+}
+
+// all documents for a specific bank
+func (s *BankUserService) GetAllDocuments(bankID uint) ([]document.Document, error) {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
+
+	var documents []document.Document
+	if err := s.repository.GetAll(uow, &documents, s.repository.Filter("bank_id = ?", bankID)); err != nil {
+		return nil, fmt.Errorf("error retrieving documents: %w", err)
+	}
+
+	uow.Commit()
+	return documents, nil
+}
+
+// document by ID
+func (s *BankUserService) GetDocumentByID(docID uint, bankID uint) (*document.Document, error) {
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
+
+	var document document.Document
+	if err := s.repository.GetFirstWhere(uow, &document, "id = ? AND bank_id = ?", docID, bankID); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return nil, fmt.Errorf("document not found")
+		}
+		return nil, fmt.Errorf("error retrieving document: %w", err)
+	}
+
+	uow.Commit()
+	return &document, nil
 }

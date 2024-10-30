@@ -36,6 +36,7 @@ func AuthenticationMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// CLIENT_USER can only CRUD on EMPLOYEES, Disburse Salary etc.
 func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +47,7 @@ func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 				return
 			}
 		}(w, r)
-		fmt.Println("Admin Validation Middleware Called")
+		fmt.Println("Client Validation Middleware Called")
 		fmt.Print(r.Context())
 		claims := r.Context().Value("claims").(*encrypt.Claims)
 		fmt.Print(claims)
@@ -77,6 +78,7 @@ func ValidateClientPermissionsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// (BANK_USER can only CRUD on Client and ClientUser)
 func ValidateBankPermissionsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +120,62 @@ func ValidateBankPermissionsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// -----------------------
+
+// (SUPER_ADMIN/ Admin can only CRUD on Banks)
+func ValidateAdminPermissionsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func(w http.ResponseWriter, r *http.Request) {
+			err := recover()
+			if err != nil {
+				fmt.Println(err)
+				errorsUtils.SendErrorWithCustomMessage(w, err.(error).Error(), http.StatusUnauthorized)
+				return
+			}
+		}(w, r)
+		fmt.Println("Admin Validation Middleware Called")
+		fmt.Print(r.Context())
+		claims := r.Context().Value("claims").(*encrypt.Claims)
+		fmt.Print(claims)
+
+		if claims.UserId == 0 {
+			errorsUtils.SendErrorWithCustomMessage(w, "Admin Privileges Denied", http.StatusUnauthorized)
+			return
+		}
+
+		if claims.RoleId != 1 {
+			errorsUtils.SendErrorWithCustomMessage(w, "Admin Privileges Denied", http.StatusUnauthorized)
+			return
+		}
+
+		if !claims.IsSuperAdmin {
+			errorsUtils.SendErrorWithCustomMessage(w, "Admin Privileges Denied", http.StatusUnauthorized)
+			return
+		}
+
+		// requested_admin_access, ok := mux.Vars(r)["user_id"]
+		// if !ok {
+		// 	errorsUtils.SendErrorWithCustomMessage(w, "User_Id not found. Please put User Id in Path", http.StatusUnauthorized)
+		// 	return
+		// }
+		// requested_admin_access_int, err := strconv.Atoi(requested_admin_access)
+		// if err != nil {
+		// 	errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusUnauthorized)
+		// 	return
+		// }
+
+		// if requested_admin_access_int != int(claims.UserId) {
+		// 	errorsUtils.SendErrorWithCustomMessage(w, "You are not authorized to access this Bank", http.StatusUnauthorized)
+		// 	return
+		// }
+
+		// ctx := context.WithValue(r.Context(), constants.ClaimsAdminKey, admin)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+///----------------------------
 // func ValidateAdminPermissionsMiddleware(next http.Handler) http.Handler {
 // 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 // 		defer func(w http.ResponseWriter, r *http.Request) {
