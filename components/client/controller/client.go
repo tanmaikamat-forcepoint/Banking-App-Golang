@@ -42,6 +42,7 @@ func (ctrl *ClientController) RegisterRoutes(
 	subRouter.HandleFunc("/employees/{employee_id}", ctrl.DeleteEmployeeById).Methods(http.MethodDelete)
 	subRouter.HandleFunc("/disburse_salary", ctrl.DisburseSalary).Methods(http.MethodPost)
 	subRouter.HandleFunc("/reports/salary_report", ctrl.GetSalaryReport).Methods(http.MethodPost)
+	subRouter.HandleFunc("/reports/payment_report", ctrl.GetPaymentReport).Methods(http.MethodPost)
 }
 
 func (ctrl *ClientController) Todo(w http.ResponseWriter, r *http.Request) {
@@ -216,8 +217,29 @@ func (ctrl *ClientController) GetSalaryReport(w http.ResponseWriter, r *http.Req
 	web.SendResponse(w,
 		web.WebResponse{
 			StatusCode: http.StatusCreated,
-			Message:    "Salary Disbursed Successfully",
+			Message:    "Salary Report Generated",
 			Data:       salaryReport,
+		})
+
+}
+
+func (ctrl *ClientController) GetPaymentReport(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+	client_id := claims.ClientId
+	if client_id == 0 {
+		errorsUtils.SendErrorWithCustomMessage(w, "Invalid JWT Token for Access", http.StatusBadRequest)
+	}
+	var paymentReport reports.PaymentReport
+	err := ctrl.ClientService.GetPaymentReport(uint(client_id), &paymentReport)
+	if err != nil {
+		errorsUtils.SendErrorWithCustomMessage(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	web.SendResponse(w,
+		web.WebResponse{
+			StatusCode: http.StatusCreated,
+			Message:    "Payment Report Generated",
+			Data:       paymentReport,
 		})
 
 }
