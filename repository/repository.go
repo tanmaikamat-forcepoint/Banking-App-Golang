@@ -14,6 +14,7 @@ type Repository interface {
 	Preload(field string, condition ...interface{}) QueryProcessor
 	Filter(condition string, args ...interface{}) QueryProcessor
 	Count(limit, offset int, totalCount *int) QueryProcessor
+	Raw(uow *UOW, out interface{}, query string, input ...interface{}) error
 	Update(uow *UOW, updated_value interface{}) error
 	DeleteById(uow *UOW, out interface{}, id interface{}) error
 }
@@ -53,6 +54,7 @@ func (g *GormRepositoryMySQL) Count(limit, offset int, totalCount *int) QueryPro
 	}
 
 }
+
 func (g *GormRepositoryMySQL) GetAll(uow *UOW, out interface{}, queryProcessors ...QueryProcessor) error {
 
 	db, err := executeQueryProcessors(uow.DB, out, queryProcessors...)
@@ -68,6 +70,10 @@ func (g *GormRepositoryMySQL) GetByID(uow *UOW, out interface{}, id ...interface
 }
 func (g *GormRepositoryMySQL) GetFirstWhere(uow *UOW, out interface{}, where ...interface{}) error {
 	return uow.DB.First(out, where...).Error
+
+}
+func (g *GormRepositoryMySQL) Raw(uow *UOW, out interface{}, query string, input ...interface{}) error {
+	return uow.DB.Raw(query, input...).Scan(out).Error
 
 }
 func (g *GormRepositoryMySQL) Add(uow *UOW, out interface{}) error {

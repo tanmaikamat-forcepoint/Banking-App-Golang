@@ -3,6 +3,8 @@ package service
 import (
 	"bankManagement/models/client"
 	"bankManagement/models/employee"
+	"bankManagement/models/payments"
+	"bankManagement/models/reports"
 	"bankManagement/models/salaryDisbursement"
 	"bankManagement/models/transaction"
 	"bankManagement/repository"
@@ -222,6 +224,156 @@ func (service *ClientService) DisburseSalaryAllEmployees(clientId uint, approved
 		}
 
 	}
+
+	uow.Commit()
+	return nil
+}
+
+func (service *ClientService) GetSalaryReport(clientId uint, report *reports.SalaryReport) error {
+	uow := repository.NewUnitOfWork(service.DB)
+	defer uow.RollBack()
+	var allEmployees []employee.Employee
+	employeeCount := 0
+	err := service.repository.GetAll(uow, &allEmployees,
+		service.repository.Filter("client_id=?", clientId),
+		service.repository.Count(100000, 0, &employeeCount),
+	)
+	if err != nil {
+		return err
+	}
+
+	tempClient := &client.Client{}
+	err = service.repository.GetByID(uow, tempClient, clientId)
+	if err != nil {
+		return err
+	}
+	var amountToBeDisbursed float64 = 0
+	for _, emp := range allEmployees {
+		amountToBeDisbursed += emp.SalaryAmount
+	}
+
+	SalaryReport := &reports.SalaryReport{
+		ExpectedMonthlySalaryDisbursal: 0,
+		TotalSalaryDisbursed:           0,
+		AverageSalary:                  0,
+		TotalEmployees:                 employeeCount,
+		ClientID:                       clientId,
+		ClientName:                     tempClient.ClientName,
+	}
+	// var disbursal struct {
+	// 	sum float64
+	// }
+	// err = service.repository.Raw(uow, &disbursal, "Select SUM(salary_amount) as sum From employees where client_id=? ;", clientId)
+	// if err != nil {
+	// 	return err
+	// }
+	// SalaryReport.ExpectedMonthlySalaryDisbursal = disbursal.sum
+	// SalaryReport.AverageSalary = SalaryReport.ExpectedMonthlySalaryDisbursal / float64(SalaryReport.TotalEmployees)
+	var empDisbursement []reports.EmployeePaymentDTO
+	for _, emp := range allEmployees {
+		empDisbursement = append(empDisbursement, reports.EmployeePaymentDTO{
+			EmpId:           emp.ID,
+			SalaryDisbursed: emp.TotalSalaryReceived,
+			MonthlySalary:   emp.SalaryAmount,
+		})
+		SalaryReport.TotalSalaryDisbursed += emp.TotalSalaryReceived
+		SalaryReport.ExpectedMonthlySalaryDisbursal += emp.SalaryAmount
+	}
+	if len(allEmployees) > 0 {
+		SalaryReport.AverageSalary = SalaryReport.ExpectedMonthlySalaryDisbursal / float64(SalaryReport.TotalEmployees)
+	}
+	SalaryReport.EmployeeDisbursementData = empDisbursement
+	*report = *SalaryReport
+
+	uow.Commit()
+	return nil
+}
+
+func (service *ClientService) GetPaymentReport(clientId uint, report *reports.PaymentReport) error {
+	uow := repository.NewUnitOfWork(service.DB)
+	defer uow.RollBack()
+	var allPaymentRequest []payments.PaymentRequest
+	employeeCount := 0
+	err := service.repository.GetAll(uow, &allPaymentRequest,
+		service.repository.Filter("sender_client_id=? OR  receiver_client_id=?", clientId, clientId),
+		service.repository.Count(100000, 0, &employeeCount),
+	)
+	if err != nil {
+		return err
+	}
+
+	tempClient := &client.Client{}
+	err = service.repository.GetByID(uow, tempClient, clientId)
+	if err != nil {
+		return err
+	}
+
+	PaymentReport := &reports.PaymentReport{
+		AveragePaymentValue:       0,
+		TotalPaymentsSent:         0,
+		TotalPaymentsReceived:     0,
+		TotalPaymentReceivedValue: 0,
+		TotalPaymentSentValue:     0,
+		TotalPaymentRequests:      0,
+		ApprovedPaymentRequests:   0,
+		RejectedPaymentRequests:   0,
+
+		ClientID: clientId,
+		// ClientName: tempClient.ClientName,
+	}
+
+	// var paymentCreated map[uint]reports.ClientPaymentDTO
+	paymentCreated := make(map[uint]reports.ClientPaymentDTO)
+	for _, req := range allPaymentRequest {
+		if req.SenderClientID == clientId && req.Status == transaction.TransactionStatusApproved {
+			//Sender is client . So money is received by other client
+			receiver, ok := paymentCreated[req.ReceiverClientID]
+			if !ok {
+				paymentCreated[req.ReceiverClientID] = reports.ClientPaymentDTO{
+					ClientID:                         req.ReceiverClientID,
+					TotalPaymentSentByThisClient:     0,
+					TotalPaymentReceivedByThisClient: 0,
+				}
+				receiver = paymentCreated[req.ReceiverClientID]
+			}
+			receiver.TotalPaymentReceivedByThisClient += req.PaymentAmount
+			PaymentReport.TotalPaymentSentValue += req.PaymentAmount
+			PaymentReport.TotalPaymentsSent += 1
+			paymentCreated[req.ReceiverClientID] = receiver
+
+		} else if req.Status == transaction.TransactionStatusApproved {
+			//money is received by the client
+			sender, ok := paymentCreated[req.SenderClientID]
+			if !ok {
+				paymentCreated[req.SenderClientID] = reports.ClientPaymentDTO{
+					ClientID:                         req.SenderClientID,
+					TotalPaymentSentByThisClient:     0,
+					TotalPaymentReceivedByThisClient: 0,
+				}
+				sender = paymentCreated[req.SenderClientID]
+			}
+			sender.TotalPaymentSentByThisClient += req.PaymentAmount
+			PaymentReport.TotalPaymentReceivedValue += req.PaymentAmount
+			PaymentReport.TotalPaymentsReceived += 1
+			paymentCreated[req.SenderClientID] = sender
+		}
+		if req.SenderClientID == clientId {
+			if req.Status == "Rejected" {
+				PaymentReport.RejectedPaymentRequests += 1
+
+			} else if req.Status == transaction.TransactionStatusApproved {
+
+				PaymentReport.ApprovedPaymentRequests += 1
+			}
+			PaymentReport.TotalPaymentRequests += 1
+		}
+	}
+	if PaymentReport.TotalPaymentsSent != 0 {
+
+		PaymentReport.AveragePaymentValue = PaymentReport.TotalPaymentSentValue / float64(PaymentReport.TotalPaymentsSent)
+	}
+	PaymentReport.ClientPaymentData = paymentCreated
+	*report = *PaymentReport
 
 	uow.Commit()
 	return nil
