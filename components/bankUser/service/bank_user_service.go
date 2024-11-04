@@ -8,10 +8,12 @@ import (
 	"bankManagement/models/transaction"
 	"bankManagement/models/user"
 	"bankManagement/repository"
+	"bankManagement/utils/email"
 	"bankManagement/utils/encrypt"
 	"bankManagement/utils/log"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
@@ -415,6 +417,7 @@ func (s *BankUserService) ApprovePaymentRequest(paymentId uint, approvedByUserId
 		return err
 	}
 
+	go email.GetSMTPService().SendEmail("Payment Approved", "Your payment with id:"+strconv.Itoa(int(paymentId))+" has been approved", senderClient.ClientEmail)
 	// paymentRequest.Status = "Approved"
 	uow.Commit()
 	return nil

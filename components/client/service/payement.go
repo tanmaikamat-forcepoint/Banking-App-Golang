@@ -146,6 +146,7 @@ func (srv *PaymentService) CreatePaymentRequest(clientId uint, createdByUserId u
 	if err != nil {
 		return err
 	}
+
 	//Balance not deducted as payment is not accepted yet
 	uow.Commit()
 	return nil

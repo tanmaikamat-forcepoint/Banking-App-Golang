@@ -50,7 +50,6 @@ func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
 	docRouter.HandleFunc("/{id}", controller.GetDocumentByID).Methods("GET")
 	docRouter.HandleFunc("/", controller.GetAllDocuments).Methods("GET")
 
-
 	paymentRouter := router.PathPrefix("/banks/{bank_id}/payment_requests").Subrouter()
 	paymentRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware)
 	paymentRouter.HandleFunc("/{payment_request_id}/approve", controller.ApprovePaymentRequest).Methods(http.MethodPost)

@@ -148,11 +148,6 @@ func ValidateAdminPermissionsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if !claims.IsSuperAdmin {
-			errorsUtils.SendErrorWithCustomMessage(w, "Admin Privileges Denied", http.StatusUnauthorized)
-			return
-		}
-
 		// requested_admin_access, ok := mux.Vars(r)["user_id"]
 		// if !ok {
 		// 	errorsUtils.SendErrorWithCustomMessage(w, "User_Id not found. Please put User Id in Path", http.StatusUnauthorized)

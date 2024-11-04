@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -14,6 +15,8 @@ type SMTPService struct {
 }
 
 var smtp_email_service *SMTPService
+
+var validTestEmails = []string{"crazinessspeaks@gmail.coms", "tkdazzles28@gmail.com"}
 
 func GetSMTPService() *SMTPService {
 	if smtp_email_service == nil {
@@ -30,13 +33,18 @@ func GetSMTPService() *SMTPService {
 	}
 	return smtp_email_service
 }
-func (service *SMTPService) SendEmail(subject string, body string, emailIds ...string) {
+func (service *SMTPService) SendEmail(subject string, body string, emailId string) {
+	fmt.Println("Send Email Called")
+	if !slices.Contains(validTestEmails, emailId) {
+		return
+	}
+
 	msg := strings.Join([]string{
 		"From: " + service.from,
 		"Subject:" + subject,
 		"",
 		body,
 	}, "\r\n")
-	err := smtp.SendMail(service.host+":587", *service.auth, service.from, emailIds, []byte(msg))
+	err := smtp.SendMail(service.host+":587", *service.auth, service.from, []string{emailId}, []byte(msg))
 	fmt.Println(err)
 }
