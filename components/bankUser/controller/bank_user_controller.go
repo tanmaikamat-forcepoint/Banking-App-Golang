@@ -12,10 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -36,7 +33,7 @@ func NewBankUserController(bankUserService *service.BankUserService, log log.Web
 }
 
 func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
-	clientRouter := router.PathPrefix("/bank/{bank_id}/client").Subrouter()
+	clientRouter := router.PathPrefix("/banks/{bank_id}/clients").Subrouter()
 	clientRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
 	clientRouter.HandleFunc("/", controller.CreateClient).Methods("POST")
 	clientRouter.HandleFunc("/{id}", controller.GetClientByID).Methods("GET")
@@ -44,11 +41,12 @@ func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
 	clientRouter.HandleFunc("/{id}", controller.UpdateClientByID).Methods("PUT")
 	clientRouter.HandleFunc("/{id}", controller.DeleteClientByID).Methods("DELETE")
 
-	docRouter := router.PathPrefix("/bank/{bank_id}/document").Subrouter()
-	docRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only UPLOAD DOCUMENTS)
-	docRouter.HandleFunc("/", controller.uploadDocumentHandler).Methods(http.MethodPost)
-	docRouter.HandleFunc("/{id}", controller.GetDocumentByID).Methods("GET")
-	docRouter.HandleFunc("/", controller.GetAllDocuments).Methods("GET")
+	documentRouter := router.PathPrefix("/banks/{bank_id}/documents").Subrouter()
+	documentRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only UPLOAD DOCUMENTS)
+	documentRouter.HandleFunc("/", controller.UploadDocument).Methods("POST")
+	documentRouter.HandleFunc("/{id}", controller.GetDocumentByID).Methods("GET")
+	documentRouter.HandleFunc("/", controller.GetAllDocuments).Methods("GET")
+	documentRouter.HandleFunc("/{id}", controller.DeleteDocumentByID).Methods("DELETE")
 
 	paymentRouter := router.PathPrefix("/banks/{bank_id}/payment_requests").Subrouter()
 	paymentRouter.Use(auth.AuthenticationMiddleware, auth.ValidateBankPermissionsMiddleware)
@@ -57,8 +55,8 @@ func (controller *BankUserController) RegisterRoutes(router *mux.Router) {
 
 	paymentRouter.HandleFunc("/{id}", controller.GetPaymentRequest).Methods(http.MethodGet)
 
-	transactionRouter := router.PathPrefix("/transaction").Subrouter()
-	transactionRouter.HandleFunc("/{client_id}/report", controller.GenerateTransactionReport).Methods(http.MethodGet)
+	transactionRouter := router.PathPrefix("/transactions").Subrouter()
+	transactionRouter.HandleFunc("/{client_id}/reports", controller.GenerateTransactionReport).Methods(http.MethodGet)
 
 }
 
@@ -393,74 +391,92 @@ func (controller *BankUserController) GenerateTransactionReport(w http.ResponseW
 	json.NewEncoder(w).Encode(transactions)
 }
 
-// -------------------------------------------------------------------------------------------------------
-const DocumentUploadDir = `C:\Users\sushant.chauhan\Desktop\Banking-App-Golang\document`
+/////////////// --------------------- Upload Document ------------------------------------------ //////////////////////
 
-// var db *gorm.DB // Global database connection
+const DocumentUploadDir = `\C:\Users\sushant.chauhan\Desktop\Banking-App-Golang\documents`
 
-func (controller *BankUserController) uploadDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	bankId, err := strconv.Atoi(vars["bank_id"])
+// / UPLOAD DOCUMENT
+func (controller *BankUserController) UploadDocument(w http.ResponseWriter, r *http.Request) {
+
+	fmt.Println(" \n----------  UploadDocument called ----------  ")
+
+	bankId, err := strconv.ParseUint(mux.Vars(r)["bank_id"], 10, 32)
 	if err != nil {
 		http.Error(w, "Invalid bank ID", http.StatusBadRequest)
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Parsing form error", http.StatusInternalServerError)
-		return
-	}
+	// if err := r.ParseMultipartForm(10 << 20); err != nil {
+	// 	http.Error(w, "Parsing form error", http.StatusInternalServerError)
+	// 	return
+	// }
 
-	file, handler, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "Error retrieving the file", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
+	fmt.Println(" -----bankId ----------- = ", bankId)
 
-	fileName := handler.Filename
-	fileType := handler.Header.Get("Content-Type")
-	filePath := filepath.Join(DocumentUploadDir, fileName)
+	fmt.Println(" -------------------- 1 -------------------- ")
 
-	dst, err := os.Create(filePath)
-	if err != nil {
-		http.Error(w, "Unable to save the file", http.StatusInternalServerError)
-		return
-	}
+	// file, fileHeader, err := r.FormFile("file")
+	// if err != nil {
+	// 	http.Error(w, "Error retrieving the file", http.StatusInternalServerError)
+	// 	return
+	// }
+	// defer file.Close()
 
-	defer dst.Close()
+	fmt.Println(" -------------------- 2-------------------- ")
 
-	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(w, "Error saving the file", http.StatusInternalServerError)
-		return
-	}
-	uploadedByUserIdStr := r.FormValue("uploaded_by_user_id")
-	clientIdStr := r.FormValue("client_id")
-	uploadedByUserId, _ := strconv.Atoi(uploadedByUserIdStr)
-	clientId, _ := strconv.Atoi(clientIdStr)
+	// os.MkdirAll(DocumentUploadDir, os.ModePerm)
 
-	document1 := document.Document{
-		FileName:         fileName,
-		FileType:         fileType,
-		FileURL:          filePath,
-		UploadedByUserId: uint(uploadedByUserId),
-		ClientId:         uint(clientId),
+	// // Define file path
+	// fileName := filepath.Base(fileHeader.Filename)
+	// fileType := fileHeader.Header.Get("Content-Type")
+	// filePath := filepath.Join(DocumentUploadDir, fileName)
+
+	// // Save the file
+	// targetFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0666)
+	// if err != nil {
+	// 	http.Error(w, "Failed to open file for writing: "+err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	// defer targetFile.Close()
+
+	fmt.Println(" -------------------- 3 -------------------- ")
+
+	// if _, err := io.Copy(targetFile, file); err != nil {
+	// 	http.Error(w, "Failed to copy the file: "+err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// uploadedByUserId, _ := strconv.ParseUint(r.FormValue("uploaded_by_user_id"), 10, 32)
+	// clientId, _ := strconv.ParseUint(r.FormValue("client_id"), 10, 32)
+
+	// Create Document record
+	documentRecord := document.Document{
+		FileName:         "fileName",
+		FileType:         "fileType",
+		FileURL:          "filePath",
+		UploadedByUserId: 7, //uint(uploadedByUserId),
+		ClientId:         2, //uint(clientId),
 		BankId:           uint(bankId),
 	}
 
-	fmt.Println("fileName, filePath, fileType ================ >>>>>>>>>> ", fileName, filePath, fileType)
+	fmt.Println("------- 4--------------------")
 
-	if result := controller.BankUserService.DB.Create(&document1); result.Error != nil {
-		http.Error(w, "Error saving document metadata", http.StatusInternalServerError)
+	// Service call to save document details
+	if err := controller.BankUserService.CreateDocument(documentRecord); err != nil {
+		http.Error(w, "Failed to create document record: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Println(w, "File uploaded and saved successfully")
+	fmt.Println("----- 5--------------------")
+
+	fmt.Println("File uploaded and saved successfully")
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("Document uploaded successfully"))
 }
 
-// get all documents for a bank
+// GET DOCUMENTS - from bank
 func (controller *BankUserController) GetAllDocuments(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("GetAllDocuments called")
+	fmt.Println("------- GetAllDocuments called ------------")
 	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
 	bankID := claims.BankId // Assuming BankId is extracted from JWT claims
 
@@ -474,10 +490,11 @@ func (controller *BankUserController) GetAllDocuments(w http.ResponseWriter, r *
 	json.NewEncoder(w).Encode(documents)
 }
 
+// / GET DOCUMENT BY ID
 func (controller *BankUserController) GetDocumentByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("GetDocumentByID called")
 	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
-	bankID := claims.BankId // Assuming BankId is extracted from JWT claims
+	bankID := claims.BankId // BankId is extracted from JWT claims
 
 	docIDStr := mux.Vars(r)["id"]
 	docID, err := strconv.Atoi(docIDStr)
@@ -494,4 +511,27 @@ func (controller *BankUserController) GetDocumentByID(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(document)
+}
+
+// // DELETE DOCUMENT - controller
+func (controller *BankUserController) DeleteDocumentByID(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("DeleteDocumentByID called")
+	claims := r.Context().Value(constants.ClaimKey).(*encrypt.Claims)
+	bankID := claims.BankId // Assuming BankId is extracted from JWT claims
+
+	docIDStr := mux.Vars(r)["id"]
+	docID, err := strconv.Atoi(docIDStr)
+	if err != nil {
+		http.Error(w, "Invalid document ID format", http.StatusBadRequest)
+		return
+	}
+
+	// Call the service layer to delete the document
+	if err := controller.BankUserService.DeleteDocumentByID(uint(docID), bankID); err != nil {
+		http.Error(w, "Failed to delete document: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	w.Write([]byte("Document deleted successfully"))
 }

@@ -39,12 +39,12 @@ func (s *BankUserService) CreateClient(clientDTO client.ClientDTO) error {
 	defer uow.RollBack()
 
 	// validation
-	if err := s.ValidateClientDTO(clientDTO); err != nil {
+	if err := s.ValidateClientDTO(uow, clientDTO); err != nil {
 		return err
 	}
 
 	// Validate if the bank_id exists in the banks table - if wrong BankID then Error
-	if err := s.ValidateBankID(clientDTO.BankID); err != nil {
+	if err := s.ValidateBankID(uow, clientDTO.BankID); err != nil {
 		return err
 	}
 
@@ -62,8 +62,12 @@ func (s *BankUserService) CreateClient(clientDTO client.ClientDTO) error {
 	}
 
 	var clientUserRole user.Role
-	if err := s.DB.Where("role_name = ?", "CLIENT_USER").First(&clientUserRole).Error; err != nil {
-		return fmt.Errorf("CLIENT_USER role not found: %w", err)
+	if err := s.repository.GetFirstWhere(uow, &clientUserRole, "role_name = ?", "CLIENT_USER"); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return fmt.Errorf("CLIENT_USER role not found: %w", err)
+		}
+		return err
+
 	}
 
 	hashedPassword := encrypt.HashPassword(clientDTO.Password)
@@ -94,29 +98,39 @@ func (s *BankUserService) CreateClient(clientDTO client.ClientDTO) error {
 }
 
 // // VALIDATION - already exists check
-func (s *BankUserService) ValidateClientDTO(clientDTO client.ClientDTO) error {
+func (s *BankUserService) ValidateClientDTO(uow *repository.UOW, clientDTO client.ClientDTO) error { //using existing uow created in CreateClient - as validation part of the same transactional flow (this only performs the validation and doesn’t commit or rollback the transaction—those decisions are left to the calling function -- CreateClient )
 
 	var existingClient client.Client
 	clientName := clientDTO.ClientName
 	clientEmail := clientDTO.ClientEmail
-	if err := s.DB.Where("client_name = ? ", clientName).First(&existingClient).Error; err == nil {
+	if err := s.repository.GetFirstWhere(uow, &existingClient, "client_name = ? ", clientName); err == nil {
 		return fmt.Errorf("client name already exists")
+	} else if !gorm.IsRecordNotFoundError(err) {
+		return err
 	}
-	if err := s.DB.Where("client_email = ?", clientEmail).First(&existingClient).Error; err == nil {
+	if err := s.repository.GetFirstWhere(uow, &existingClient, "client_email = ? ", clientEmail); err == nil {
 		return fmt.Errorf("client email already exists")
+	} else if !gorm.IsRecordNotFoundError(err) {
+		return err
 	}
+	// if err := s.DB.Where("client_name = ? ", clientName).First(&existingClient).Error; err == nil { return fmt.Errorf("client name already exists") }
+	// if err := s.DB.Where("client_email = ?", clientEmail).First(&existingClient).Error; err == nil { return fmt.Errorf("client email already exists") }
 
 	existingUser := user.User{}
 	clientUserUsername := clientDTO.Username
 	clientUserEmail := clientDTO.ClientEmail
-	if err := s.DB.Where("username = ?", clientUserUsername).First(&existingUser).Error; err == nil {
+	if err := s.repository.GetFirstWhere(uow, &existingUser, "username = ?", clientUserUsername); err == nil {
 		return fmt.Errorf("username already exists")
+	} else if !gorm.IsRecordNotFoundError(err) {
+		return err
 	}
-
-	if err := s.DB.Where("email = ?", clientUserEmail).First(&existingUser).Error; err == nil {
+	if err := s.repository.GetFirstWhere(uow, &existingUser, "email = ?", clientUserEmail); err == nil {
 		return fmt.Errorf("email already exists")
+	} else if !gorm.IsRecordNotFoundError(err) {
+		return err
 	}
-
+	// if err := s.DB.Where("username = ?", clientUserUsername).First(&existingUser).Error; err == nil { return fmt.Errorf("username already exists") }
+	// if err := s.DB.Where("email = ?", clientUserEmail).First(&existingUser).Error; err == nil { return fmt.Errorf("email already exists") }
 	return nil
 }
 
@@ -126,14 +140,15 @@ func HashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
-func (s *BankUserService) ValidateBankID(bankID uint) error {
+func (s *BankUserService) ValidateBankID(uow *repository.UOW, bankID uint) error {
 	var bankEntity bank.Bank
-	if err := s.DB.First(&bankEntity, bankID).Error; err != nil {
+	if err := s.repository.GetByID(uow, &bankEntity, bankID); err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			return fmt.Errorf("bank with ID %d does not exist", bankID)
 		}
 		return err // other errors
 	}
+	// if err := s.DB.First(&bankEntity, bankID).Error; err != nil {}
 	return nil
 }
 
@@ -336,7 +351,7 @@ func (s *BankUserService) ApprovePaymentRequest(paymentId uint, approvedByUserId
 		return err
 	}
 	if bankUser.UserID != approvedByUserId || bankUser.UserID == 0 {
-		return errors.New("Unauthorized Access to Approve Request")
+		return errors.New("unauthorized access to approve request")
 	}
 	//Validating if User has valid balance
 	senderClient := client.Client{}
@@ -345,10 +360,10 @@ func (s *BankUserService) ApprovePaymentRequest(paymentId uint, approvedByUserId
 		return err
 	}
 	if senderClient.Balance < paymentRequest.PaymentAmount {
-		return errors.New("Cannot Approve the Payment as Balance Insufficient. Reject the Payment or Contact Client to update Balance")
+		return errors.New("cannot approve the payment as balance insufficient. reject the payment or contact client to update balance")
 	}
-	//Creating New Payment Entry
 
+	//Creating New Payment Entry
 	paymentEntry := payments.Payment{
 		SenderClientID:   paymentRequest.SenderClientID,
 		ReceiverClientID: paymentRequest.ReceiverClientID,
@@ -485,19 +500,22 @@ func (s *BankUserService) GenerateTransactionReport(clientID uint) ([]transactio
 //-------------------------------------------------------------------------------------------------------
 
 // upload document
-func (s *BankUserService) SaveDocumentData(doc document.Document) error {
+// Service layer method to create a document record
+func (s *BankUserService) CreateDocument(doc document.Document) error {
+
+	fmt.Println(" --------------------CreateDocument Service Function  START--------------------")
+
 	uow := repository.NewUnitOfWork(s.DB)
 	defer uow.RollBack()
-
-	if doc.FileName == "" || doc.FileType == "" || doc.FileURL == "" {
-		return errors.New("document must include a file name, file type, and file URL")
-	}
 
 	if err := s.repository.Add(uow, &doc); err != nil {
 		return fmt.Errorf("failed to add document: %w", err)
 	}
 
 	uow.Commit()
+
+	fmt.Println(" --------------------CreateDocument Service Function - END-------------------")
+
 	return nil
 }
 
@@ -530,4 +548,36 @@ func (s *BankUserService) GetDocumentByID(docID uint, bankID uint) (*document.Do
 
 	uow.Commit()
 	return &document, nil
+}
+
+// / DELETE DOCUMENT - service
+func (s *BankUserService) DeleteDocumentByID(docID uint, bankID uint) error {
+	fmt.Println("DeleteDocumentByID service called")
+
+	uow := repository.NewUnitOfWork(s.DB)
+	defer uow.RollBack()
+
+	var documentEntity document.Document
+	// Checking if document exists and is associated with the given bank ID
+	if err := s.repository.GetFirstWhere(uow, &documentEntity,
+		"id = ? AND bank_id = ?", docID, bankID); err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return fmt.Errorf("document with ID %d not found for bank ID %d", docID, bankID)
+		}
+		return fmt.Errorf("failed to fetch document: %w", err)
+	}
+
+	// // Remove file from the filesystem
+	// if err := os.Remove(documentEntity.FileURL); err != nil {
+	// 	return fmt.Errorf("failed to delete file from filesystem: %w", err)
+	// }
+
+	// Delete the document record from the database
+	if err := s.repository.DeleteById(uow, &documentEntity, docID); err != nil {
+		return fmt.Errorf("failed to delete document record: %w", err)
+	}
+
+	fmt.Println("DeleteDocumentByID service finished")
+	uow.Commit()
+	return nil
 }
