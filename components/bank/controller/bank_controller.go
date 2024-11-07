@@ -32,8 +32,7 @@ func NewBankController(UserServcice *service.BankService, log log.WebLogger) *Ba
 
 func (controller *BankController) RegisterRoutes(router *mux.Router) {
 	bankRouter := router.PathPrefix("/banks").Subrouter()
-	bankRouter.Use(auth.AuthenticationMiddleware, auth.ValidateAdminPermissionsMiddleware) // BankUSer middleware  (BANK_USER can only CRUD on Client and ClientUser)
-	// bankRouter.Use(middleware.ValidateAdminPermissionsMiddleware)                         // SuperAdmin middleware
+	bankRouter.Use(auth.AuthenticationMiddleware, auth.ValidateAdminPermissionsMiddleware) // SuperAdmin middleware
 	bankRouter.HandleFunc("/", controller.CreateBank).Methods("POST")
 	bankRouter.HandleFunc("/", controller.GetAllBanks).Methods("GET")
 	bankRouter.HandleFunc("/{id}", controller.GetBankByID).Methods("GET")
@@ -143,7 +142,7 @@ func (controller *BankController) GetAllBanks(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(banks)
 }
 
-// DELETE
+// DELETE Bank
 func (controller *BankController) DeleteBank(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("DeleteBank controller called...")
 
@@ -161,7 +160,6 @@ func (controller *BankController) DeleteBank(w http.ResponseWriter, r *http.Requ
 
 	w.WriteHeader(http.StatusNoContent)
 	w.Write([]byte(fmt.Sprintf("Bank and associated BankUser with ID %d successfully deleted", bankID)))
-
 }
 
 // // UPDATE BANK
